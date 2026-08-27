@@ -80,7 +80,7 @@ public class PunchOutIdentityService
     /// </returns>
     public async Task<PunchOutIdentity> GetPunchOutIdentityByIdAsync(int identityId)
     {
-        return await _punchOutIdentityRepository.GetByIdAsync(identityId, cache => default);
+        return await _punchOutIdentityRepository.GetByIdAsync(identityId);
     }
 
     /// <summary>

@@ -13,7 +13,7 @@ public class PunchOutSettings : ISettings
     public bool IsActive { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating the time in hours after which the PunchOut session will be expired
+    /// Gets or sets the time in hours after which the PunchOut session will be expired
     /// </summary>
     public int TimeToExpire { get; set; }
 
@@ -21,5 +21,4 @@ public class PunchOutSettings : ISettings
     /// Gets or sets a list of restricted customer role identifiers
     /// </summary>
     public List<int> RestrictedCustomerRoleIds { get; set; } = new();
-
 }

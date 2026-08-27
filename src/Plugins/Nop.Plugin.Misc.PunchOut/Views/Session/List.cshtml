@@ -34,9 +34,9 @@
                         Title = T("Plugins.Misc.PunchOut.Session.CustomerEmail").Text,
                         Render = new RenderLink(new DataUrl("~/Admin/Customer/Edit", nameof(PunchOutSessionModel.CustomerId)))
                     },
-                    new ColumnProperty(nameof(PunchOutSessionModel.StoreId))
+                    new ColumnProperty(nameof(PunchOutSessionModel.StoreName))
                     {
-                        Title = T("Plugins.Misc.PunchOut.Session.StoreId").Text,
+                        Title = T("Plugins.Misc.PunchOut.Session.Store").Text,
                         Width = "100"
                     },
                     new ColumnProperty(nameof(PunchOutSessionModel.CreatedOnUtc))
@@ -56,7 +56,6 @@
             })
             <script>
                 function renderCloseSession(data, type, row, meta) {
-                    var link = "@Url.Action("CloseSession", "PunchOutAdmin")";
                     var title = '@T("Plugins.Misc.PunchOut.Session.CloseSession").Text';
                     var buttonHtml = `<button class="btn btn-default" onclick="closeSession('${row.CustomerId}', '${row.StoreId}')" type="button">${title}</button>`;
                     return buttonHtml;
@@ -73,11 +72,11 @@
                         type: "POST",
                         url: "@(Url.Action("CloseSession", "PunchOutAdmin"))",
                         data: postData,
-                        success: function (data, textStatus, jqXHR) {
+                        complete: function (jqXHR, textStatus) {
                             updateTable('#session-grid');
                         },
                         error: function (jqXHR, textStatus, errorThrown) {
-                            alert('@T("Plugins.Misc.PunchOut.Session.CloseSessionError").Text');
+                            showAlert('closeSessionAlert', '@T("Plugins.Misc.PunchOut.Session.CloseSessionError").Text');
                         }
                     });
                 }
@@ -85,3 +84,4 @@
         </div>
     </div>
 </div>
+<nop-alert asp-alert-id="closeSessionAlert" />

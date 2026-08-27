@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Nop.Core;
+using Nop.Core.Domain.Customers;
 using Nop.Plugin.Misc.PunchOut.Models;
 using Nop.Plugin.Misc.PunchOut.Models.Identity;
 using Nop.Plugin.Misc.PunchOut.Models.Log;
@@ -14,6 +15,7 @@ using Nop.Services.Html;
 using Nop.Services.Localization;
 using Nop.Services.Messages;
 using Nop.Services.Security;
+using Nop.Services.Stores;
 using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Models.Extensions;
@@ -37,6 +39,7 @@ public class PunchOutAdminController : BasePluginController
     protected readonly ILocalizationService _localizationService;
     protected readonly INotificationService _notificationService;
     protected readonly ISettingService _settingService;
+    protected readonly IStoreService _storeService;
     protected readonly IWorkContext _workContext;
     protected readonly PunchOutIdentityService _punchOutIdentityService;
     protected readonly PunchOutLogService _punchOutLogService;
@@ -54,6 +57,7 @@ public class PunchOutAdminController : BasePluginController
         ILocalizationService localizationService,
         INotificationService notificationService,
         ISettingService settingService,
+        IStoreService storeService,
         IWorkContext workContext,
         PunchOutIdentityService punchOutIdentityService,
         PunchOutLogService punchOutLogService,
@@ -67,6 +71,7 @@ public class PunchOutAdminController : BasePluginController
         _localizationService = localizationService;
         _notificationService = notificationService;
         _settingService = settingService;
+        _storeService = storeService;
         _workContext = workContext;
         _punchOutIdentityService = punchOutIdentityService;
         _punchOutLogService = punchOutLogService;
@@ -102,11 +107,10 @@ public class PunchOutAdminController : BasePluginController
             Selected = model.SelectedCustomerRoleIds.Contains(role.Id)
         }).ToList();
 
-
         model.PunchOutLogSearchModel.HideSearchBlock = await _genericAttributeService
-            .GetAttributeAsync<bool>(currentCustomer, PunchOutDefaults.HideSearchLogBlockAttribute);
+            .GetAttributeAsync<bool>(currentCustomer, PunchOutDefaults.HideSearchLogBlock);
         model.PunchOutIdentitySearchModel.HideSearchBlock = await _genericAttributeService
-            .GetAttributeAsync<bool>(currentCustomer, PunchOutDefaults.HideSearchIdentityBlockAttribute);
+            .GetAttributeAsync<bool>(currentCustomer, PunchOutDefaults.HideSearchIdentityBlock);
 
         model.HideGeneralBlock = await _genericAttributeService.GetAttributeAsync<bool>(currentCustomer, PunchOutDefaults.HideGeneralBlock);
         model.HideIdentityBlock = await _genericAttributeService.GetAttributeAsync<bool>(currentCustomer, PunchOutDefaults.HideIdentityBlock);
@@ -301,7 +305,10 @@ public class PunchOutAdminController : BasePluginController
             pageIndex: searchModel.Page - 1, pageSize: searchModel.PageSize);
 
         if (punchOutSessions is null)
-            return Json(new PunchOutSessionModel());
+            return ErrorJson("Error retrieving saved sessions");
+
+        //prepare store names (to avoid loading for each item)
+        var storeNames = (await _storeService.GetAllStoresAsync()).ToDictionary(store => store.Id, store => store.Name);
 
         //prepare grid model
         var model = await new PunchOutSessionListModel().PrepareToGridAsync(searchModel, punchOutSessions, () =>
@@ -316,6 +323,7 @@ public class PunchOutAdminController : BasePluginController
                     CustomerId = sessionItem.CustomerId,
                     CustomerEmail = (await _customerService.GetCustomerByIdAsync(sessionItem.CustomerId))?.Email ?? string.Empty,
                     StoreId = sessionItem.StoreId,
+                    StoreName = storeNames.TryGetValue(sessionItem.StoreId, out var value) ? value : "Deleted",
                     CreatedOnUtc = await _dateTimeHelper.ConvertToUserTimeAsync(sessionItem.CreatedOnUtc, DateTimeKind.Utc)
                 };
                 return model;
@@ -329,12 +337,9 @@ public class PunchOutAdminController : BasePluginController
     [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
     public async Task<IActionResult> CloseSession(int customerId, int storeId)
     {
-        //try to get a punchout session
-        var sessionGenericAttribute = await _punchOutService.GetAttributeForEntityAsync(customerId, storeId)
-            ?? throw new ArgumentException("No session found with the specified entity id");
+        await _genericAttributeService
+            .SaveAttributeAsync<string>(new Customer { Id = customerId }, PunchOutDefaults.PunchOutSessionAttribute, null, storeId);
 
-        await _genericAttributeService.DeleteAttributesAsync([sessionGenericAttribute]);
-        
         return new NullJsonResult();
     }
 

@@ -66,7 +66,7 @@ public class PunchOutLogService
         ArgumentNullException.ThrowIfNull(punchOutLog);
 
         punchOutLog.CreatedOnUtc = DateTime.UtcNow;
-        await _punchOutLogRepository.InsertAsync(punchOutLog);
+        await _punchOutLogRepository.InsertAsync(punchOutLog, false);
     }
 
     /// <summary>

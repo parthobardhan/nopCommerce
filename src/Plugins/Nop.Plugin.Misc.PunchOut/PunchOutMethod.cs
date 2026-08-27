@@ -57,7 +57,7 @@ public class PunchOutMethod : BasePlugin, IMiscPlugin
         {
             IsActive = false,
             TimeToExpire = PunchOutDefaults.TimeToExpireSession,
-            RestrictedCustomerRoleIds = [(await _customerService.GetCustomerRoleBySystemNameAsync(NopCustomerDefaults.AdministratorsRoleName)).Id],
+            RestrictedCustomerRoleIds = [(await _customerService.GetCustomerRoleBySystemNameAsync(NopCustomerDefaults.AdministratorsRoleName)).Id]
         });
 
         await _localizationService.AddOrUpdateLocaleResourceAsync(new Dictionary<string, string>
@@ -106,7 +106,7 @@ public class PunchOutMethod : BasePlugin, IMiscPlugin
             ["Plugins.Misc.PunchOut.Session.BuyerCookie"] = "Buyer Cookie",
             ["Plugins.Misc.PunchOut.Session.IsActive"] = "Is Active",
             ["Plugins.Misc.PunchOut.Session.CustomerEmail"] = "Customer Email",
-            ["Plugins.Misc.PunchOut.Session.StoreId"] = "Store ID",
+            ["Plugins.Misc.PunchOut.Session.Store"] = "Store",
             ["Plugins.Misc.PunchOut.Session.CreatedOnUtc"] = "Created On",
             ["Plugins.Misc.PunchOut.Session.CloseSession"] = "Close Session",
             ["Plugins.Misc.PunchOut.Session.CloseSessionError"] = "An error occurred while closing the PunchOut session.",

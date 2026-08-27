@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Nop.Core;
-using Nop.Core.Domain.Customers;
 using Nop.Core.Http;
 using Nop.Plugin.Misc.PunchOut.Services;
 using Nop.Services.Helpers;
@@ -99,7 +98,14 @@ public class PunchOutSessionGuardAttribute : TypeFilterAttribute
                 new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
                     "Info",
-                    "Register"
+                    "Register",
+                    "PasswordRecovery",
+                    "Addresses",
+                    "DownloadableProducts",
+                    "Avatar",
+                    "GdprTools",
+                    "CheckGiftCardBalance",
+                    "MultiFactorAuthentication"
                 }
             }
         };
@@ -138,30 +144,31 @@ public class PunchOutSessionGuardAttribute : TypeFilterAttribute
         {
             ArgumentNullException.ThrowIfNull(context);
 
+            if (!_punchOutSettings.IsActive)
+                return;
+
             var actionDescriptor = context.ActionDescriptor as ControllerActionDescriptor;
             var actionName = actionDescriptor?.ActionName;
             var controllerName = actionDescriptor?.ControllerName;
             if (string.IsNullOrEmpty(actionName) || string.IsNullOrEmpty(controllerName))
                 return;
 
-            if (!_punchOutSettings.IsActive)
-                return;
-
-            var customer = await _workContext.GetCurrentCustomerAsync();
-
-            //ignore search engines and background tasks
-            if (customer.IsSearchEngineAccount() || customer.IsBackgroundTaskAccount())
-                return;
-
             //ignore AJAX requests
             if (_webHelper.IsAjaxRequest(context.HttpContext.Request))
+                return;
+
+            //ignore search engines and background tasks
+            var customer = await _workContext.GetCurrentCustomerAsync();
+            if (customer.IsSystemAccount)
                 return;
 
             //ignore admin area requests
             if (context.RouteData.Values.TryGetValue("area", out var area) &&
                 area is string areaStr &&
                 areaStr.Equals(AreaNames.ADMIN, StringComparison.OrdinalIgnoreCase))
+            {
                 return;
+            }
 
             var session = await _punchOutService.GetPunchOutSessionAsync();
             if (session != null && session.IsActive)
@@ -195,8 +202,7 @@ public class PunchOutSessionGuardAttribute : TypeFilterAttribute
         /// <returns>True if the action is forbidden; otherwise false</returns>
         private static bool IsForbiddenAction(string controllerName, string actionName)
         {
-            return _forbiddenActions.TryGetValue(controllerName, out var forbiddenActions) &&
-                   forbiddenActions.Contains(actionName);
+            return _forbiddenActions.TryGetValue(controllerName, out var forbiddenActions) && forbiddenActions.Contains(actionName);
         }
 
         /// <summary>
@@ -211,21 +217,22 @@ public class PunchOutSessionGuardAttribute : TypeFilterAttribute
             if (!_punchOutSettings.IsActive)
                 return;
 
-            var customer = await _workContext.GetCurrentCustomerAsync();
-
-            //ignore search engines and background tasks
-            if (customer.IsSearchEngineAccount() || customer.IsBackgroundTaskAccount())
-                return;
-
             //ignore AJAX requests
             if (_webHelper.IsAjaxRequest(context.HttpContext.Request))
+                return;
+
+            //ignore search engines and background tasks
+            var customer = await _workContext.GetCurrentCustomerAsync();
+            if (customer.IsSystemAccount)
                 return;
 
             //ignore admin area requests
             if (context.RouteData.Values.TryGetValue("area", out var area) &&
                 area is string areaStr &&
                 areaStr.Equals(AreaNames.ADMIN, StringComparison.OrdinalIgnoreCase))
+            {
                 return;
+            }
 
             var session = await _punchOutService.GetPunchOutSessionAsync();
             if (session != null && session.IsActive)
@@ -236,9 +243,7 @@ public class PunchOutSessionGuardAttribute : TypeFilterAttribute
                 if (routeName is NopRouteNames.General.CART && context.Result is ViewResult viewResult)
                 {
                     if (viewResult.ViewData.Model is ShoppingCartModel model)
-                    {
                         model.ShowItemDiscount = false;
-                    }
 
                     // Replace the view name while keeping the model
                     viewResult.ViewName = "~/Plugins/Misc.PunchOut/Views/PunchOutCart.cshtml";

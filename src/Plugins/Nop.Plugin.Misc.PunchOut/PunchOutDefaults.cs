@@ -30,12 +30,12 @@ public class PunchOutDefaults
     /// <summary>
     /// Gets the generic attribute name to hide search block on the plugin configuration page
     /// </summary>
-    public static string HideSearchLogBlockAttribute => "PunchOut.HideSearchLogBlock";
+    public static string HideSearchLogBlock => "PunchOut.HideSearchLogBlock";
 
     /// <summary>
     /// Gets the generic attribute name to hide search block on the plugin configuration page
     /// </summary>
-    public static string HideSearchIdentityBlockAttribute => "PunchOut.HideSearchIdentityBlock";
+    public static string HideSearchIdentityBlock => "PunchOut.HideSearchIdentityBlock";
 
     /// <summary>
     /// Gets the generic attribute name to hide general settings block on the plugin configuration page
@@ -69,12 +69,8 @@ public class PunchOutDefaults
 
     #endregion
 
-    #region Generic attributes for PunchOut session
-
     /// <summary>
-    /// Customer attribute key for storing session token
+    /// Customer attribute key for storing session
     /// </summary>
-    public static string PunchOutSessionTokenAttribute => "PunchOutSessionToken";
-
-    #endregion
+    public static string PunchOutSessionAttribute => "PunchOutSession";
 }

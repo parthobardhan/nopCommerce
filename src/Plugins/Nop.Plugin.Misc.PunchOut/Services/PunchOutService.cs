@@ -16,6 +16,7 @@ using Nop.Services.Common;
 using Nop.Services.Customers;
 using Nop.Services.Directory;
 using Nop.Services.Helpers;
+using Nop.Services.Localization;
 using Nop.Services.Orders;
 using Nop.Services.Tax;
 using ILogger = Nop.Services.Logging.ILogger;
@@ -35,8 +36,10 @@ public class PunchOutService
     protected readonly ICountryService _countryService;
     protected readonly ICustomerService _customerService;
     protected readonly IGenericAttributeService _genericAttributeService;
+    protected readonly ILocalizationService _localizationService;
     protected readonly ILogger _logger;
     protected readonly IPriceCalculationService _priceCalculationService;
+    protected readonly IProductAttributeFormatter _productAttributeFormatter;
     protected readonly IProductService _productService;
     protected readonly IRepository<GenericAttribute> _genericAttributeRepository;
     protected readonly IShoppingCartService _shoppingCartService;
@@ -60,8 +63,10 @@ public class PunchOutService
         ICountryService countryService,
         ICustomerService customerService,
         IGenericAttributeService genericAttributeService,
+        ILocalizationService localizationService,
         ILogger logger,
         IPriceCalculationService priceCalculationService,
+        IProductAttributeFormatter productAttributeFormatter,
         IProductService productService,
         IRepository<GenericAttribute> genericAttributeRepository,
         IShoppingCartService shoppingCartService,
@@ -81,8 +86,10 @@ public class PunchOutService
         _countryService = countryService;
         _customerService = customerService;
         _genericAttributeService = genericAttributeService;
+        _localizationService = localizationService;
         _logger = logger;
         _priceCalculationService = priceCalculationService;
+        _productAttributeFormatter = productAttributeFormatter;
         _productService = productService;
         _genericAttributeRepository = genericAttributeRepository;
         _shoppingCartService = shoppingCartService;
@@ -107,11 +114,14 @@ public class PunchOutService
     /// <param name="identity">The identity of the sender</param>
     /// <param name="sharedSecret">The incoming shared secret</param>
     /// <param name="payloadId">The payload ID</param>
-    /// <returns>The XML string</returns>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains the XML string
+    /// </returns>
     private async Task<string> ValidateSenderAsync(string identity, string sharedSecret, string payloadId)
     {
         var sender = await _punchOutIdentityService.GetPunchOutIdentityAsync(identity)
-                ?? throw new NopException("Unknown PunchOut identity.");
+            ?? throw new NopException("Unknown PunchOut identity.");
 
         // client validation verification
         var storedIdentity = sender?.SharedSecretHash;
@@ -246,7 +256,7 @@ public class PunchOutService
     /// </summary>
     /// <param name="fullName">The full name</param>
     /// <returns>The first name</returns>
-    private string ExtractFirstName(string fullName)
+    private static string ExtractFirstName(string fullName)
     {
         if (string.IsNullOrEmpty(fullName))
             return string.Empty;
@@ -260,7 +270,7 @@ public class PunchOutService
     /// </summary>
     /// <param name="fullName">The full name</param>
     /// <returns>The last name</returns>
-    private string ExtractLastName(string fullName)
+    private static string ExtractLastName(string fullName)
     {
         if (string.IsNullOrEmpty(fullName))
             return string.Empty;
@@ -269,6 +279,14 @@ public class PunchOutService
         return parts.Length > 1 ? string.Join(" ", parts.Skip(1)) : string.Empty;
     }
 
+    /// <summary>
+    /// Get session by identifier
+    /// </summary>
+    /// <param name="sessionId">Session id</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains the session
+    /// </returns>
     private async Task<PunchOutSession> GetPunchOutSessionByIdAsync(string sessionId)
     {
         var key = _staticCacheManager.PrepareKeyForDefaultCache(PunchOutDefaults.SessionTokenCacheKey, sessionId);
@@ -288,7 +306,8 @@ public class PunchOutService
     private async Task<string> SavePunchoutSessionAsync(Customer customer, PunchOutSession session)
     {
         var token = session.SessionId;
-        await _genericAttributeService.SaveAttributeAsync(customer, PunchOutDefaults.PunchOutSessionTokenAttribute, JsonConvert.SerializeObject(session), session.StoreId);
+        var jsonSession = JsonConvert.SerializeObject(session);
+        await _genericAttributeService.SaveAttributeAsync(customer, PunchOutDefaults.PunchOutSessionAttribute, jsonSession, session.StoreId);
 
         //save session data to cache for quick retrieval during the session
         var key = _staticCacheManager.PrepareKeyForDefaultCache(PunchOutDefaults.SessionTokenCacheKey, session.SessionId);
@@ -333,9 +352,7 @@ public class PunchOutService
 
             var validationError = await ValidateSenderAsync(request.Identity, request.SharedSecret, request.PayloadId);
             if (!string.IsNullOrEmpty(validationError))
-            {
                 return validationError;
-            }
 
             // customer creation
             var contactEmail = string.IsNullOrEmpty(request.Contact)
@@ -373,11 +390,8 @@ public class PunchOutService
 
             //Restricted customer role check
             var customerRoleIds = await _customerService.GetCustomerRoleIdsAsync(customer);
-            if (_punchOutSettings.RestrictedCustomerRoleIds.Any()
-                && !customerRoleIds.Intersect(_punchOutSettings.RestrictedCustomerRoleIds).Any())
-            {
+            if (customerRoleIds.Intersect(_punchOutSettings.RestrictedCustomerRoleIds).Any())
                 throw new NopException("Access with current customer role denied.");
-            }
 
             // PunchOut session
             var session = new PunchOutSession
@@ -487,6 +501,7 @@ public class PunchOutService
     /// <summary>
     /// Builds the PunchOutOrderMessage XML based on the current customer's shopping cart
     /// </summary>
+    /// <param name="session">Session</param>
     /// <returns>
     /// A task that represents the asynchronous operation
     /// The task result contains the response XML
@@ -506,17 +521,24 @@ public class PunchOutService
         foreach (var item in cart)
         {
             var product = await _productService.GetProductByIdAsync(item.ProductId);
+            if (product is null)
+                continue;
+
             var currency = await _workContext.GetWorkingCurrencyAsync();
 
-            var (_, finalPrice, _, _) = await _priceCalculationService.GetFinalPriceAsync(product, customer, store, quantity: item.Quantity);
+            var (finalPrice, _, _) = await _shoppingCartService.GetUnitPriceAsync(item, true);
             var (shoppingCartItemSubTotalWithDiscountBase, _) = await _taxService.GetProductPriceAsync(product, finalPrice);
             var priceValue = await _currencyService.ConvertFromPrimaryStoreCurrencyAsync(shoppingCartItemSubTotalWithDiscountBase, currency);
             total += priceValue * item.Quantity;
 
+            var name = await _localizationService.GetLocalizedAsync(product, x => x.Name);
+            var attributes = !string.IsNullOrEmpty(item.AttributesXml)
+                ? await _productAttributeFormatter.FormatAttributesAsync(product, item.AttributesXml)
+                : null;
             model.Items.Add(new PunchOutOrderItem
             {
-                SupplierPartId = product != null ? await _productService.FormatSkuAsync(product, item.AttributesXml) : string.Empty,
-                Description = product.Name,
+                SupplierPartId = await _productService.FormatSkuAsync(product, item.AttributesXml),
+                Description = $"{name}{(!string.IsNullOrEmpty(attributes) ? $"({attributes})" : null)}",
                 Quantity = item.Quantity,
                 UnitPrice = priceValue,
                 CurrencyCode = currency.CurrencyCode
@@ -544,9 +566,9 @@ public class PunchOutService
             var customer = await _workContext.GetCurrentCustomerAsync();
             var store = await _storeContext.GetCurrentStoreAsync();
 
-            var jsonSession = await _genericAttributeService.GetAttributeAsync<string>(customer,
-                PunchOutDefaults.PunchOutSessionTokenAttribute, store.Id);
-
+            var jsonSession = await _genericAttributeService
+                .GetAttributeAsync<string>(customer, PunchOutDefaults.PunchOutSessionAttribute, store.Id)
+                ?? string.Empty;
             var session = JsonConvert.DeserializeObject<PunchOutSession>(jsonSession);
 
             return session?.IsActive ?? false;
@@ -572,8 +594,11 @@ public class PunchOutService
 
         try
         {
-            var jsonSession = await _genericAttributeService.GetAttributeAsync<string>(customer, PunchOutDefaults.PunchOutSessionTokenAttribute, store.Id);
+            var jsonSession = await _genericAttributeService
+                .GetAttributeAsync<string>(customer, PunchOutDefaults.PunchOutSessionAttribute, store.Id)
+                ?? string.Empty;
             var session = JsonConvert.DeserializeObject<PunchOutSession>(jsonSession);
+
             if (session != null)
             {
                 session.IsActive = session?.IsActive ?? false && !string.IsNullOrEmpty(session.SessionId);
@@ -602,25 +627,24 @@ public class PunchOutService
     {
         try
         {
-            var query = from ga in _genericAttributeRepository.Table
-                        where ga.Key == PunchOutDefaults.PunchOutSessionTokenAttribute &&
-                              ga.KeyGroup == nameof(Customer)
-                        select ga;
+            var query =
+                from ga in _genericAttributeRepository.Table
+                where ga.Key == PunchOutDefaults.PunchOutSessionAttribute &&
+                      ga.KeyGroup == nameof(Customer)
+                select ga;
 
             //store
             if (storeId > 0)
                 query = query.Where(ga => ga.StoreId == storeId);
 
-            var jsonSessions = await query.ToListAsync();
+            var jsonSessions = await query.ToPagedListAsync(pageIndex, pageSize);
             var sessions = new List<PunchOutSession>();
 
             foreach (var jsonSession in jsonSessions)
             {
-                var session = JsonConvert.DeserializeObject<PunchOutSession>(jsonSession.Value);
+                var session = JsonConvert.DeserializeObject<PunchOutSession>(jsonSession.Value ?? string.Empty);
                 if (session != null)
-                {
                     sessions.Add(session);
-                }
             }
 
             //paging
@@ -632,30 +656,6 @@ public class PunchOutService
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Get attribute for the entity
-    /// </summary>
-    /// <param name="entityId">Entity identifier</param>
-    /// <param name="storeId">Store identifier</param>
-    /// <returns>
-    /// A task that represents the asynchronous operation
-    /// The task result contains the get attribute
-    /// </returns>
-    public virtual async Task<GenericAttribute> GetAttributeForEntityAsync(int entityId, int storeId = 0)
-    {
-        var query = from ga in _genericAttributeRepository.Table
-                    where ga.EntityId == entityId &&
-                          ga.KeyGroup == nameof(Customer) &&
-                          ga.Key == PunchOutDefaults.PunchOutSessionTokenAttribute
-                    select ga;
-
-        //store
-        if (storeId > 0)
-            query = query.Where(ga => ga.StoreId == storeId);
-
-        return await query.FirstOrDefaultAsync();
     }
 
     /// <summary>
@@ -671,10 +671,12 @@ public class PunchOutService
 
         try
         {
-            var jsonSession = await _genericAttributeService.GetAttributeAsync<string>(customer, PunchOutDefaults.PunchOutSessionTokenAttribute, store.Id);
+            var jsonSession = await _genericAttributeService
+                .GetAttributeAsync<string>(customer, PunchOutDefaults.PunchOutSessionAttribute, store.Id)
+                ?? string.Empty;
             var session = JsonConvert.DeserializeObject<PunchOutSession>(jsonSession);
 
-            await _genericAttributeService.SaveAttributeAsync(customer, PunchOutDefaults.PunchOutSessionTokenAttribute, (string)null, store.Id);
+            await _genericAttributeService.SaveAttributeAsync<string>(customer, PunchOutDefaults.PunchOutSessionAttribute, null, store.Id);
 
             if (session != null && !string.IsNullOrEmpty(session.SessionId))
             {

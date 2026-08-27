@@ -13,5 +13,6 @@ public record PunchOutSessionModel : BaseNopModel
     public int CustomerId { get; set; }
     public string CustomerEmail { get; set; }
     public int StoreId { get; set; }
+    public string StoreName { get; set; }
     public DateTime CreatedOnUtc { get; set; }
 }
