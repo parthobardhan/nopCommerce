@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": ".cursor/hooks/protect-core-edits.py",
+        "matcher": "Write|StrReplace|Delete"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/block-destructive-shell.py"
+      }
+    ]
+  }
+}

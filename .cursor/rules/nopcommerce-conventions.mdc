@@ -1,0 +1,21 @@
+---
+description: nopCommerce architecture — plugins over core, async, widget zones
+alwaysApply: true
+---
+
+# nopCommerce conventions
+
+- Prefer a plugin under `src/Plugins/` over editing `Nop.Core`, `Nop.Data`, `Nop.Services`, or MVC controllers. Core edits are a last resort.
+- Storefront injections go through widget zones in `PublicWidgetZones` (for example `CheckoutCompletedTop`). Do not patch `CheckoutController` to add HTML.
+- All service and controller methods are async. Do not add new sync service APIs.
+- Match neighboring code: `BasePlugin`, `plugin.json`, output to `Presentation/Nop.Web/Plugins/{FolderName}/`.
+- Do not commit `App_Data/appsettings.json`, connection strings, or secrets.
+
+```csharp
+// ❌ BAD — banner baked into checkout
+public async Task<IActionResult> Completed(int? orderId) { /* add ViewBag.Banner */ }
+
+// ✅ GOOD — IWidgetPlugin registered on CheckoutCompletedTop
+public Task<IList<string>> GetWidgetZonesAsync() =>
+    Task.FromResult<IList<string>>(new List<string> { PublicWidgetZones.CheckoutCompletedTop });
+```

@@ -1,0 +1,20 @@
+---
+description: First-party plugin layout, plugin.json, and csproj output path
+globs: src/Plugins/**/*
+alwaysApply: false
+---
+
+# Plugin conventions
+
+Clone an existing widget (`Nop.Plugin.Widgets.Jotform` or `Nop.Plugin.Widgets.Swiper`), do not invent a new project shape.
+
+Required:
+- `plugin.json` with `Group`, `SystemName`, `FileName`, `SupportedVersions: ["5.00"]`
+- csproj `OutputPath` → `$(SolutionDir)\Presentation\Nop.Web\Plugins\{FolderName}`
+- `NopTarget` after Build (see `Nop.Plugin.Widgets.Swiper/Notes.txt`)
+- Views: Build Action Content, copy if newer
+
+Widget plugins implement `IWidgetPlugin`: `GetWidgetZonesAsync`, `GetWidgetViewComponent`.
+Payment plugins implement `IPaymentMethod`. Discount rules implement `IDiscountRequirementRule`.
+
+Do not add a database migration for copy-only or settings-only plugins. Use `ISettingService`.
