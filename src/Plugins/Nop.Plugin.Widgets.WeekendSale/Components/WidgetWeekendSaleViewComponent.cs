@@ -40,7 +40,7 @@ public class WidgetWeekendSaleViewComponent : NopViewComponent
 
         var model = new PublicInfoModel
         {
-            BannerText = EncodeBannerText(_weekendSaleSettings.BannerText)
+            EncodedBannerText = EncodeBannerText(_weekendSaleSettings.BannerText)
         };
 
         return View("~/Plugins/Widgets.WeekendSale/Views/PublicInfo.cshtml", model);

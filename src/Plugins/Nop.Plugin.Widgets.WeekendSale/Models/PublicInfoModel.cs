@@ -8,5 +8,5 @@ public class PublicInfoModel
     /// <summary>
     /// Gets or sets HTML-encoded banner text
     /// </summary>
-    public string BannerText { get; set; }
+    public string EncodedBannerText { get; set; }
 }
