@@ -1,0 +1,11 @@
+{
+  "Group": "Widgets",
+  "FriendlyName": "Weekend Sale banner",
+  "SystemName": "Widgets.WeekendSale",
+  "Version": "5.00.0",
+  "SupportedVersions": [ "5.00" ],
+  "Author": "nopCommerce team",
+  "DisplayOrder": 1,
+  "FileName": "Nop.Plugin.Widgets.WeekendSale.dll",
+  "Description": "Shows a WEEKEND10 thank-you banner on the checkout completed page during the weekend sale"
+}
