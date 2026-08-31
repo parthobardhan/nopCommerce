@@ -1,0 +1,16 @@
+@model PublicInfoModel
+@{
+    Layout = "";
+}
+
+<link href="~/Plugins/Widgets.PromoBanner/Content/css/styles.css" rel="stylesheet" />
+
+<div class="promo-banner" role="region" aria-label="Promotion">
+    <div class="promo-banner__content">
+        <div class="promo-banner__text">
+            <strong class="promo-banner__headline">@Model.Headline</strong>
+            <span class="promo-banner__body">@Model.BodyText</span>
+        </div>
+        <a class="promo-banner__cta button-1" href="@Model.ButtonUrl">@Model.ButtonText</a>
+    </div>
+</div>
