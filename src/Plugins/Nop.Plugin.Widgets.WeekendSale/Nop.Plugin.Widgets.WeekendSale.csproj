@@ -19,6 +19,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Nop.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="plugin.json" />
     <None Remove="Views\PublicInfo.cshtml" />
     <None Remove="Views\_ViewImports.cshtml" />
