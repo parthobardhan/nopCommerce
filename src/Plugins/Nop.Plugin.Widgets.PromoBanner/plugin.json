@@ -1,0 +1,11 @@
+{
+  "Group": "Widgets",
+  "FriendlyName": "Promo banner",
+  "SystemName": "Widgets.PromoBanner",
+  "Version": "5.00.0",
+  "SupportedVersions": [ "5.00" ],
+  "Author": "nopCommerce team",
+  "DisplayOrder": 1,
+  "FileName": "Nop.Plugin.Widgets.PromoBanner.dll",
+  "Description": "This plugin displays a configurable promotional banner on the homepage"
+}

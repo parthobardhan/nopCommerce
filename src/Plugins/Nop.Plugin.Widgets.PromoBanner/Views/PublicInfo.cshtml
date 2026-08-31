@@ -1,0 +1,29 @@
+@model PublicInfoModel
+@{
+    Layout = "";
+}
+
+<link href="~/Plugins/Widgets.PromoBanner/Content/css/styles.css" rel="stylesheet" />
+
+<div class="promo-banner"@if (!string.IsNullOrEmpty(Model.BackgroundColor)) { <text> style="background-color: @Model.BackgroundColor;"</text> }>
+    @if (!string.IsNullOrEmpty(Model.PictureUrl))
+    {
+        <div class="promo-banner-picture">
+            <img src="@Model.PictureUrl" alt="@Model.Headline" />
+        </div>
+    }
+    <div class="promo-banner-content">
+        @if (!string.IsNullOrEmpty(Model.Headline))
+        {
+            <div class="promo-banner-headline">@Model.Headline</div>
+        }
+        @if (!string.IsNullOrEmpty(Model.Body))
+        {
+            <div class="promo-banner-body">@Model.Body</div>
+        }
+        @if (!string.IsNullOrEmpty(Model.ButtonText) && !string.IsNullOrEmpty(Model.ButtonUrl))
+        {
+            <a class="promo-banner-button" href="@Model.ButtonUrl">@Model.ButtonText</a>
+        }
+    </div>
+</div>

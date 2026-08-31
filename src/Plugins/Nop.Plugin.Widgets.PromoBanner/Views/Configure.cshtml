@@ -1,0 +1,95 @@
+@model ConfigurationModel
+
+@{
+    Layout = "_ConfigurePlugin";
+}
+
+@await Component.InvokeAsync(typeof(StoreScopeConfigurationViewComponent))
+
+<form asp-controller="PromoBanner" asp-action="Configure" method="post">
+    <section class="content">
+        <div class="container-fluid">
+            <div class="card card-default">
+                <div class="card-body">
+                    <div class="form-group row">
+                        <div class="col-md-3">
+                            <nop-override-store-checkbox asp-for="@Model.Enabled_OverrideForStore" asp-input="@Model.Enabled" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                            <nop-label asp-for="Enabled" />
+                        </div>
+                        <div class="col-md-9">
+                            <nop-editor asp-for="Enabled" />
+                            <span asp-validation-for="Enabled"></span>
+                        </div>
+                    </div>
+                    <nop-nested-setting asp-for="Enabled">
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-override-store-checkbox asp-for="@Model.Headline_OverrideForStore" asp-input="@Model.Headline" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                <nop-label asp-for="Headline" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="Headline" />
+                                <span asp-validation-for="Headline"></span>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-override-store-checkbox asp-for="@Model.Body_OverrideForStore" asp-input="@Model.Body" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                <nop-label asp-for="Body" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-textarea asp-for="Body" />
+                                <span asp-validation-for="Body"></span>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-override-store-checkbox asp-for="@Model.ButtonText_OverrideForStore" asp-input="@Model.ButtonText" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                <nop-label asp-for="ButtonText" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="ButtonText" />
+                                <span asp-validation-for="ButtonText"></span>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-override-store-checkbox asp-for="@Model.ButtonUrl_OverrideForStore" asp-input="@Model.ButtonUrl" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                <nop-label asp-for="ButtonUrl" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="ButtonUrl" />
+                                <span asp-validation-for="ButtonUrl"></span>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-override-store-checkbox asp-for="@Model.BackgroundColor_OverrideForStore" asp-input="@Model.BackgroundColor" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                <nop-label asp-for="BackgroundColor" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="BackgroundColor" />
+                                <span asp-validation-for="BackgroundColor"></span>
+                            </div>
+                        </div>
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-override-store-checkbox asp-for="@Model.PictureId_OverrideForStore" asp-input="@Model.PictureId" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                                <nop-label asp-for="PictureId" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="PictureId" />
+                                <span asp-validation-for="PictureId"></span>
+                            </div>
+                        </div>
+                    </nop-nested-setting>
+                    <div class="form-group row">
+                        <div class="col-md-9 offset-md-3">
+                            <input type="submit" name="save" class="btn btn-primary" value="@T("Admin.Common.Save")" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</form>
