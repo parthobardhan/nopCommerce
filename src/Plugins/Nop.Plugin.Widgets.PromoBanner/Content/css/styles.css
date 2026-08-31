@@ -1,0 +1,55 @@
+.promo-banner {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin: 0 0 20px;
+    padding: 24px 28px;
+    color: #fff;
+    background-color: #1c1c1c;
+}
+
+.promo-banner-picture img {
+    display: block;
+    max-height: 96px;
+    width: auto;
+}
+
+.promo-banner-content {
+    flex: 1 1 auto;
+}
+
+.promo-banner-headline {
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0 0 8px;
+}
+
+.promo-banner-body {
+    font-size: 14px;
+    line-height: 1.5;
+    opacity: 0.9;
+    margin: 0 0 16px;
+}
+
+.promo-banner-button {
+    display: inline-block;
+    padding: 8px 18px;
+    background: #fff;
+    color: #1c1c1c;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.promo-banner-button:hover {
+    opacity: 0.85;
+    color: #1c1c1c;
+}
+
+@media (max-width: 767px) {
+    .promo-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+}
