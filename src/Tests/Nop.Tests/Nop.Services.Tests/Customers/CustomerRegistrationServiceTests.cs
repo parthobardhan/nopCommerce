@@ -21,13 +21,15 @@ public class CustomerRegistrationServiceTests : ServiceTest
         _customerRegistrationService = GetService<ICustomerRegistrationService>();
     }
 
-    private async Task<Customer> CreateCustomerAsync(PasswordFormat passwordFormat, bool isRegistered = true)
+    private async Task<Customer> CreateCustomerAsync(PasswordFormat passwordFormat, bool isRegistered = true, string phone = null, string email = "test@test.com")
     {
         var customer = new Customer
         {
-            Username = "test@test.com",
-            Email = "test@test.com",
-            Active = true
+            Username = email,
+            Email = email,
+            Active = true,
+            Phone = phone,
+            PhoneSmsVerified = !string.IsNullOrEmpty(phone)
         };
 
         await _customerService.InsertCustomerAsync(customer);
@@ -124,5 +126,40 @@ public class CustomerRegistrationServiceTests : ServiceTest
         success.Success.Should().BeTrue();
 
         await DeleteCustomerAsync(customer);
+    }
+
+    [Test]
+    public async Task CanValidateCustomerByPhone()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear, phone: "+14155550100", email: "phone-success@test.com");
+
+        var result = await _customerRegistrationService.ValidateCustomerByPhoneAsync("+14155550100");
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.Successful);
+    }
+
+    [Test]
+    public async Task EnsureLockedOutCustomersCannotLoginByPhone()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear, phone: "+14155550101", email: "phone-locked@test.com");
+        customer.CannotLoginUntilDateUtc = DateTime.UtcNow.AddMinutes(10);
+        await _customerService.UpdateCustomerAsync(customer);
+
+        var result = await _customerRegistrationService.ValidateCustomerByPhoneAsync("+14155550101");
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.LockedOut);
+    }
+
+    [Test]
+    public async Task EnsureOnlyRegisteredCustomersCanLoginByPhone()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear, false, "+14155550102", "phone-unregistered@test.com");
+
+        var result = await _customerRegistrationService.ValidateCustomerByPhoneAsync("+14155550102");
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.NotRegistered);
     }
 }
