@@ -298,8 +298,9 @@ public static partial class NopCatalogDefaults
     /// {4} : quantity
     /// {5} : roles of the current user
     /// {6} : current store ID
+    /// {7} : customer id (price lists can be assigned per customer)
     /// </remarks>
-    public static CacheKey ProductPriceCacheKey => new("Nop.totals.productprice.{0}-{1}-{2}-{3}-{4}-{5}-{6}");
+    public static CacheKey ProductPriceCacheKey => new("Nop.totals.productprice.{0}-{1}-{2}-{3}-{4}-{5}-{6}-{7}");
 
     /// <summary>
     /// Gets a key pattern to clear cache

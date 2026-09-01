@@ -116,7 +116,7 @@ public partial class PriceCalculationService : IPriceCalculationService
                     var priceListPrices = new List<decimal>();
                     foreach (var priceList in applicablePriceLists)
                     {
-                        var price = priceList.Value ?? _priceListService.ApplyAdjustmentPrice(product, priceList.Key);
+                        var price = priceList.Value ?? _priceListService.ApplyAdjustmentPrice(product, priceList.Key, basePrice);
                         priceListPrices.Add(price);
                     }
 
@@ -129,7 +129,7 @@ public partial class PriceCalculationService : IPriceCalculationService
                     var priceList = applicablePriceLists.OrderBy(x => x.Key.Priority).FirstOrDefault();
                     if (priceList.Key != null)
                     {
-                        var price = priceList.Value ?? _priceListService.ApplyAdjustmentPrice(product, priceList.Key);
+                        var price = priceList.Value ?? _priceListService.ApplyAdjustmentPrice(product, priceList.Key, basePrice);
                         return price;
                     }
 
@@ -430,7 +430,8 @@ public partial class PriceCalculationService : IPriceCalculationService
             includeDiscounts,
             quantity,
             await _customerService.GetCustomerRoleIdsAsync(customer),
-            store);
+            store,
+            customer.Id);
 
         //we do not cache price if this not allowed by settings or if the product is rental product
         //otherwise, it can cause memory leaks (to store all possible date period combinations)
@@ -450,16 +451,20 @@ public partial class PriceCalculationService : IPriceCalculationService
             //initial price
             var price = overriddenProductPrice ?? product.Price;
 
-            //get price from price list
+            //get price from price list (contract / B2B price replaces catalog + volume tiers)
             var priceListPrice = await GetPriceListPriceAsync(product, customer, price);
             if (priceListPrice.HasValue)
+            {
                 price = priceListPrice.Value;
+            }
+            else
+            {
+                //tier prices apply only when no price list covers this product
+                var tierPrice = await _productService.GetPreferredTierPriceAsync(product, customer, store, quantity);
 
-            //tier prices
-            var tierPrice = await _productService.GetPreferredTierPriceAsync(product, customer, store, quantity);
-
-            if (tierPrice != null)
-                price = tierPrice.Price;
+                if (tierPrice != null)
+                    price = tierPrice.Price;
+            }
 
             //additional charge
             price += additionalCharge;
