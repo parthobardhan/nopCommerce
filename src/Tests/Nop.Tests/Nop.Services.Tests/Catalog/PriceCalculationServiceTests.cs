@@ -3,9 +3,11 @@ using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Domain.Directory;
 using Nop.Core.Domain.Discounts;
+using Nop.Core.Domain.PriceLists;
 using Nop.Core.Domain.Stores;
 using Nop.Services.Catalog;
 using Nop.Services.Customers;
+using Nop.Services.PriceLists;
 using NUnit.Framework;
 
 namespace Nop.Tests.Nop.Services.Tests.Catalog;
@@ -18,6 +20,7 @@ public class PriceCalculationServiceTests : ServiceTest
     private ICustomerService _customerService;
     private IProductService _productService;
     private IPriceCalculationService _priceCalcService;
+    private IPriceListService _priceListService;
 
     #endregion
 
@@ -29,6 +32,7 @@ public class PriceCalculationServiceTests : ServiceTest
         _customerService = GetService<ICustomerService>();
         _productService = GetService<IProductService>();
         _priceCalcService = GetService<IPriceCalculationService>();
+        _priceListService = GetService<IPriceListService>();
     }
 
     #endregion
@@ -166,6 +170,98 @@ public class PriceCalculationServiceTests : ServiceTest
 
         finalPrice.Should().Be(69.99M);
         finalPriceWithoutDiscounts.Should().Be(79.99M);
+    }
+
+    [Test]
+    public async Task PriceListPercentageAdjustmentUsesOverriddenCombinationPrice()
+    {
+        var product = await _productService.GetProductBySkuAsync("BP_20_WSP");
+        var customer = await _customerService.GetCustomerByEmailAsync(NopTestsDefaults.AdminEmail);
+        var store = new Store();
+        var priceList = await InsertCustomerPriceListAsync(customer, PriceCalculationTypeEnum.PercentageDecrease, 10);
+
+        try
+        {
+            await _priceListService.InsertPriceListItemAsync(new PriceListItem
+            {
+                PriceListId = priceList.Id,
+                ProductId = product.Id
+            });
+
+            var (_, finalPrice, _, _) = await _priceCalcService.GetFinalPriceAsync(product, customer, store,
+                overriddenProductPrice: 200M, additionalCharge: 0, includeDiscounts: false, quantity: 1,
+                rentalStartDate: null, rentalEndDate: null);
+
+            // 10% off the combination override ($200), not catalog $79.99
+            finalPrice.Should().Be(180M);
+        }
+        finally
+        {
+            await DeletePriceListAsync(priceList);
+        }
+    }
+
+    [Test]
+    public async Task PriceListManualPriceIsNotOverwrittenByCatalogTierPrice()
+    {
+        var product = await _productService.GetProductBySkuAsync("BP_20_WSP");
+        var customer = await _customerService.GetCustomerByEmailAsync(NopTestsDefaults.AdminEmail);
+        var store = new Store();
+        var priceList = await InsertCustomerPriceListAsync(customer, PriceCalculationTypeEnum.PercentageDecrease, 0);
+
+        try
+        {
+            await _priceListService.InsertPriceListItemAsync(new PriceListItem
+            {
+                PriceListId = priceList.Id,
+                ProductId = product.Id,
+                ManualPrice = 50M
+            });
+
+            var (_, qty1, _, _) = await _priceCalcService.GetFinalPriceAsync(product, customer, store, 0, false, 1);
+            var (_, qty2, _, _) = await _priceCalcService.GetFinalPriceAsync(product, customer, store, 0, false, 2);
+
+            qty1.Should().Be(50M);
+            // qty 2 would be catalog tier $19 without this fix
+            qty2.Should().Be(50M);
+        }
+        finally
+        {
+            await DeletePriceListAsync(priceList);
+        }
+    }
+
+    private async Task<PriceList> InsertCustomerPriceListAsync(Customer customer, PriceCalculationTypeEnum type, decimal value)
+    {
+        var priceList = new PriceList
+        {
+            Name = "Test price list",
+            Active = true,
+            PriceCalculationType = type,
+            PriceCalculationValue = value,
+            Priority = 1
+        };
+        await _priceListService.InsertPriceListAsync(priceList);
+        await _priceListService.InsertPriceListCustomerAsync(new PriceListCustomer
+        {
+            PriceListId = priceList.Id,
+            CustomerId = customer.Id
+        });
+
+        return priceList;
+    }
+
+    private async Task DeletePriceListAsync(PriceList priceList)
+    {
+        var items = await _priceListService.GetPriceListItemsByPriceListIdAsync(priceList.Id);
+        foreach (var item in items)
+            await _priceListService.DeletePriceListItemAsync(item);
+
+        var customers = await _priceListService.GetPriceListCustomersByPriceListIdAsync(priceList.Id);
+        foreach (var mapping in customers)
+            await _priceListService.DeletePriceListCustomerAsync(mapping);
+
+        await _priceListService.DeletePriceListAsync(priceList);
     }
 
     [TestCase(12.366, 12.37, RoundingType.Rounding001)]

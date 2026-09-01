@@ -304,14 +304,15 @@ public partial class PriceListService : IPriceListService
     /// </summary>
     /// <param name="product">The product</param>
     /// <param name="priceList">The price list</param>
+    /// <param name="basePrice">Price to adjust. When omitted, <see cref="Product.Price"/> is used.</param>
     /// <returns>
     /// The calculated price after applying the adjustment defined in the price list.
     /// </returns>
-    public virtual decimal ApplyAdjustmentPrice(Product product, PriceList priceList)
+    public virtual decimal ApplyAdjustmentPrice(Product product, PriceList priceList, decimal? basePrice = null)
     {
         var adjustmentType = (PriceCalculationTypeEnum)priceList.PriceCalculationTypeId;
         var value = priceList.PriceCalculationValue;
-        var originalPrice = product.Price;
+        var originalPrice = basePrice ?? product.Price;
 
         return adjustmentType switch
         {

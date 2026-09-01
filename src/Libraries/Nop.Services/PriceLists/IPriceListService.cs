@@ -116,10 +116,12 @@ public partial interface IPriceListService
     /// </summary>
     /// <param name="product">The product</param>
     /// <param name="priceList">The price list</param>
+    /// <param name="basePrice">Price to adjust. When omitted, <see cref="Product.Price"/> is used.
+    /// Pass an overridden combination price so percentage/amount adjustments apply to the price the customer is actually buying.</param>
     /// <returns>
     /// The calculated price after applying the adjustment defined in the price list.
     /// </returns>
-    decimal ApplyAdjustmentPrice(Product product, PriceList priceList);
+    decimal ApplyAdjustmentPrice(Product product, PriceList priceList, decimal? basePrice = null);
 
     /// <summary>
     /// Gets a price list item
