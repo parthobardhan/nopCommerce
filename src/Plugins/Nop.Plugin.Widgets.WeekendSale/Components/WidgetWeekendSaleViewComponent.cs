@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Nop.Core.Domain.Orders;
 using Nop.Plugin.Widgets.WeekendSale.Models;
 using Nop.Web.Framework.Components;
+using Nop.Web.Models.Checkout;
 
 namespace Nop.Plugin.Widgets.WeekendSale.Components;
 
@@ -44,17 +44,19 @@ public class WidgetWeekendSaleViewComponent : NopViewComponent
     /// </summary>
     public async Task<IViewComponentResult> InvokeAsync(string widgetZone, object additionalData)
     {
-        var order = additionalData as Order;
-        var orderNumber = order.CustomOrderNumber;
-
         if (!IsWeekendSaleActive(DateTime.Now))
+            return Content(string.Empty);
+
+        // Completed.cshtml passes CheckoutCompletedModel, not Order.
+        var completed = additionalData as CheckoutCompletedModel;
+        if (completed is null)
             return Content(string.Empty);
 
         var model = new PublicInfoModel
         {
             BannerText = _weekendSaleSettings.BannerText,
             CouponCode = _weekendSaleSettings.CouponCode,
-            OrderNumber = orderNumber
+            OrderNumber = completed.CustomOrderNumber
         };
 
         return await ViewAsync("~/Plugins/Widgets.WeekendSale/Views/PublicInfo.cshtml", model);
