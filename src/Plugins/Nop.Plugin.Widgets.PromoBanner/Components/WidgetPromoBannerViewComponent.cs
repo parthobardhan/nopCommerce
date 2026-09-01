@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Nop.Plugin.Widgets.PromoBanner.Models;
+using Nop.Services.Localization;
 using Nop.Web.Framework.Components;
 
 namespace Nop.Plugin.Widgets.PromoBanner.Components;
@@ -9,6 +10,13 @@ namespace Nop.Plugin.Widgets.PromoBanner.Components;
 /// </summary>
 public class WidgetPromoBannerViewComponent : NopViewComponent
 {
+    private readonly ILocalizationService _localizationService;
+
+    public WidgetPromoBannerViewComponent(ILocalizationService localizationService)
+    {
+        _localizationService = localizationService;
+    }
+
     /// <summary>
     /// Invoke view component
     /// </summary>
@@ -18,9 +26,9 @@ public class WidgetPromoBannerViewComponent : NopViewComponent
     {
         var model = new PublicInfoModel
         {
-            Headline = PromoBannerDefaults.Headline,
-            Text = PromoBannerDefaults.Text,
-            ButtonText = PromoBannerDefaults.ButtonText,
+            Headline = await _localizationService.GetResourceAsync("Plugins.Widgets.PromoBanner.Headline"),
+            Text = await _localizationService.GetResourceAsync("Plugins.Widgets.PromoBanner.Text"),
+            ButtonText = await _localizationService.GetResourceAsync("Plugins.Widgets.PromoBanner.ButtonText"),
             LinkUrl = PromoBannerDefaults.LinkUrl
         };
 
