@@ -688,7 +688,8 @@ public partial class CustomerController : BasePublicController
             {
                 case CustomerLoginResults.Successful:
                     {
-                        await _authenticationService.SignInAsync(customer, false);
+                        // Same path as password login: migrate the guest cart and raise login events.
+                        await _customerRegistrationService.SignInCustomerAsync(customer, returnUrl: null);
                         break;
                     }
                 case CustomerLoginResults.CustomerNotExist:
