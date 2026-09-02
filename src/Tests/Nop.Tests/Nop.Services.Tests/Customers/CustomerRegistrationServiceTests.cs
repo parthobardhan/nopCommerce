@@ -1,7 +1,9 @@
 ﻿using AwesomeAssertions;
 using Nop.Core;
+using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Domain.Orders;
+using Nop.Data;
 using Nop.Services.Catalog;
 using Nop.Services.Customers;
 using Nop.Services.Orders;
@@ -142,13 +144,36 @@ public class CustomerRegistrationServiceTests : ServiceTest
         var originalCustomer = await _workContext.GetCurrentCustomerAsync();
         var guest = await _customerService.InsertGuestCustomerAsync();
         var registered = await CreateCustomerAsync(PasswordFormat.Clear);
+        var store = await GetService<IStoreContext>().GetCurrentStoreAsync();
+        var product = new Product
+        {
+            Name = "OTP cart migration product",
+            Published = true,
+            ProductType = ProductType.SimpleProduct,
+            VisibleIndividually = true,
+            OrderMinimumQuantity = 1,
+            OrderMaximumQuantity = 10000,
+            Price = 10
+        };
+        await _productService.InsertProductAsync(product);
+
+        var cartItem = new ShoppingCartItem
+        {
+            ProductId = product.Id,
+            Quantity = 1,
+            CustomerId = guest.Id,
+            ShoppingCartType = ShoppingCartType.ShoppingCart,
+            StoreId = store.Id,
+            CreatedOnUtc = DateTime.UtcNow,
+            UpdatedOnUtc = DateTime.UtcNow
+        };
+        await GetService<IRepository<ShoppingCartItem>>().InsertAsync(cartItem);
+        guest.HasShoppingCartItems = true;
+        await _customerService.UpdateCustomerAsync(guest);
 
         try
         {
             await _workContext.SetCurrentCustomerAsync(guest);
-
-            var product = await _productService.GetProductByIdAsync(1);
-            await _shoppingCartService.AddToCartAsync(guest, product, ShoppingCartType.ShoppingCart, 1);
 
             (await _shoppingCartService.GetShoppingCartAsync(guest, ShoppingCartType.ShoppingCart))
                 .Should().NotBeEmpty();
@@ -168,6 +193,7 @@ public class CustomerRegistrationServiceTests : ServiceTest
             await _workContext.SetCurrentCustomerAsync(originalCustomer);
             await DeleteCustomerAsync(registered);
             await _customerService.DeleteCustomerAsync(guest);
+            await _productService.DeleteProductAsync(product);
         }
     }
 }
