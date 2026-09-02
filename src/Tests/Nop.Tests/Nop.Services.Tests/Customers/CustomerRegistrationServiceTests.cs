@@ -1,6 +1,12 @@
 ﻿using AwesomeAssertions;
+using Nop.Core;
+using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Customers;
+using Nop.Core.Domain.Orders;
+using Nop.Data;
+using Nop.Services.Catalog;
 using Nop.Services.Customers;
+using Nop.Services.Orders;
 using Nop.Services.Security;
 using NUnit.Framework;
 
@@ -12,6 +18,9 @@ public class CustomerRegistrationServiceTests : ServiceTest
     private ICustomerService _customerService;
     private IEncryptionService _encryptionService;
     private ICustomerRegistrationService _customerRegistrationService;
+    private IShoppingCartService _shoppingCartService;
+    private IProductService _productService;
+    private IWorkContext _workContext;
 
     [OneTimeSetUp]
     public void SetUp()
@@ -19,6 +28,9 @@ public class CustomerRegistrationServiceTests : ServiceTest
         _customerService = GetService<ICustomerService>();
         _encryptionService = GetService<IEncryptionService>();
         _customerRegistrationService = GetService<ICustomerRegistrationService>();
+        _shoppingCartService = GetService<IShoppingCartService>();
+        _productService = GetService<IProductService>();
+        _workContext = GetService<IWorkContext>();
     }
 
     private async Task<Customer> CreateCustomerAsync(PasswordFormat passwordFormat, bool isRegistered = true)
@@ -124,5 +136,64 @@ public class CustomerRegistrationServiceTests : ServiceTest
         success.Success.Should().BeTrue();
 
         await DeleteCustomerAsync(customer);
+    }
+
+    [Test]
+    public async Task SignInCustomerMigratesGuestShoppingCart()
+    {
+        var originalCustomer = await _workContext.GetCurrentCustomerAsync();
+        var guest = await _customerService.InsertGuestCustomerAsync();
+        var registered = await CreateCustomerAsync(PasswordFormat.Clear);
+        var store = await GetService<IStoreContext>().GetCurrentStoreAsync();
+        var product = new Product
+        {
+            Name = "OTP cart migration product",
+            Published = true,
+            ProductType = ProductType.SimpleProduct,
+            VisibleIndividually = true,
+            OrderMinimumQuantity = 1,
+            OrderMaximumQuantity = 10000,
+            Price = 10
+        };
+        await _productService.InsertProductAsync(product);
+
+        var cartItem = new ShoppingCartItem
+        {
+            ProductId = product.Id,
+            Quantity = 1,
+            CustomerId = guest.Id,
+            ShoppingCartType = ShoppingCartType.ShoppingCart,
+            StoreId = store.Id,
+            CreatedOnUtc = DateTime.UtcNow,
+            UpdatedOnUtc = DateTime.UtcNow
+        };
+        await GetService<IRepository<ShoppingCartItem>>().InsertAsync(cartItem);
+        guest.HasShoppingCartItems = true;
+        await _customerService.UpdateCustomerAsync(guest);
+
+        try
+        {
+            await _workContext.SetCurrentCustomerAsync(guest);
+
+            (await _shoppingCartService.GetShoppingCartAsync(guest, ShoppingCartType.ShoppingCart))
+                .Should().NotBeEmpty();
+
+            await _customerRegistrationService.SignInCustomerAsync(registered, returnUrl: null);
+
+            (await _shoppingCartService.GetShoppingCartAsync(registered, ShoppingCartType.ShoppingCart))
+                .Should().ContainSingle(item => item.ProductId == product.Id);
+            (await _shoppingCartService.GetShoppingCartAsync(guest, ShoppingCartType.ShoppingCart))
+                .Should().BeEmpty();
+        }
+        finally
+        {
+            foreach (var item in await _shoppingCartService.GetShoppingCartAsync(registered, ShoppingCartType.ShoppingCart))
+                await _shoppingCartService.DeleteShoppingCartItemAsync(item);
+
+            await _workContext.SetCurrentCustomerAsync(originalCustomer);
+            await DeleteCustomerAsync(registered);
+            await _customerService.DeleteCustomerAsync(guest);
+            await _productService.DeleteProductAsync(product);
+        }
     }
 }
