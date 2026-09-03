@@ -418,14 +418,11 @@ public class RfqCustomerController : BasePublicController
 
         if (ModelState.IsValid)
         {
-            if (model.CustomerId != customer.Id)
-                return RedirectToRoute(RfqDefaults.CustomerQuotesRouteName);
-
             var quote = await _rfqService.GetQuoteByIdAsync(model.Id);
-            if (quote.Status is QuoteStatus.Expired or QuoteStatus.OrderCreated)
+            if (!RfqService.CanCustomerCreateOrderFromQuote(quote, customer.Id))
                 return RedirectToRoute(RfqDefaults.CustomerQuotesRouteName);
 
-            await _rfqService.CreateShoppingCartAsync(model.Id);
+            await _rfqService.CreateShoppingCartAsync(quote.Id);
 
             return RedirectToRoute(NopRouteNames.General.CART);
         }
