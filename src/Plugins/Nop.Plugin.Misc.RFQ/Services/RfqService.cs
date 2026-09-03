@@ -787,6 +787,15 @@ public class RfqService
     }
 
     /// <summary>
+    /// Whether the customer may create an order from this quote.
+    /// Must use the persisted quote owner/status — posted form values are not trusted.
+    /// </summary>
+    public static bool CanCustomerCreateOrderFromQuote(Quote quote, int customerId)
+    {
+        return quote != null && quote.CustomerId == customerId && quote.Status == QuoteStatus.Submitted;
+    }
+
+    /// <summary>
     /// Changes the quote status and add the note to the admin note field
     /// </summary>
     /// <param name="quote">Quote to change status</param>
@@ -855,8 +864,12 @@ public class RfqService
         if (!await _permissionService.AuthorizeAsync(StandardPermission.PublicStore.ENABLE_SHOPPING_CART, customer))
             throw new NopException("Shopping cart is disabled");
 
+        var quote = await GetQuoteByIdAsync(quoteId);
+        if (!CanCustomerCreateOrderFromQuote(quote, customer.Id))
+            throw new NopException("Quote is not available for order creation");
+
         var store = await _storeContext.GetCurrentStoreAsync();
-        var quoteItems = await GetQuoteItemsAsync(quoteId);
+        var quoteItems = await GetQuoteItemsAsync(quote.Id);
 
         await _shoppingCartService.ClearShoppingCartAsync(customer, store.Id);
 
