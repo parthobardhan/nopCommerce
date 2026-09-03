@@ -24,9 +24,4 @@ public static class PromoBannerDefaults
     /// Gets the hardcoded call-to-action button text
     /// </summary>
     public static string ButtonText => "Shop now";
-
-    /// <summary>
-    /// Gets the hardcoded call-to-action path
-    /// </summary>
-    public static string LinkUrl => "/newproducts";
 }

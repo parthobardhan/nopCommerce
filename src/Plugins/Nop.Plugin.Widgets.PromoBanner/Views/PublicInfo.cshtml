@@ -11,6 +11,9 @@
             <h2 class="promo-banner-headline">@Model.Headline</h2>
             <p class="promo-banner-text">@Model.Text</p>
         </div>
-        <a class="button-1 promo-banner-cta" href="@Model.LinkUrl">@Model.ButtonText</a>
+        @if (Model.ShowButton && !string.IsNullOrEmpty(Model.LinkUrl))
+        {
+            <a class="button-1 promo-banner-cta" href="@Model.LinkUrl">@Model.ButtonText</a>
+        }
     </div>
 </div>
