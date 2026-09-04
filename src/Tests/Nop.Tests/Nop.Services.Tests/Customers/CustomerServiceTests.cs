@@ -90,4 +90,115 @@ public class CustomerServiceTests : ServiceTest
         countAddresses.Should().Be(0);
         billingAddressId.Should().BeNull();
     }
+
+    [Test]
+    public async Task CanGetCustomerByPhoneWhenSingleUnverifiedMatch()
+    {
+        var phone = "+15550001001";
+        var customer = await InsertPhoneCustomerAsync("phone-lookup-1@test.com", phone, verified: false);
+
+        try
+        {
+            var found = await _customerService.GetCustomerByPhoneAsync(phone);
+            found.Should().NotBeNull();
+            found.Id.Should().Be(customer.Id);
+        }
+        finally
+        {
+            await DeletePhoneCustomerAsync(customer);
+        }
+    }
+
+    [Test]
+    public async Task GetCustomerByPhoneReturnsVerifiedOwnerWhenDuplicatesExist()
+    {
+        var phone = "+15550001002";
+        var unverified = await InsertPhoneCustomerAsync("phone-lookup-unverified@test.com", phone, verified: false);
+        var verified = await InsertPhoneCustomerAsync("phone-lookup-verified@test.com", phone, verified: true);
+
+        try
+        {
+            var found = await _customerService.GetCustomerByPhoneAsync(phone);
+            found.Should().NotBeNull();
+            found.Id.Should().Be(verified.Id);
+        }
+        finally
+        {
+            await DeletePhoneCustomerAsync(unverified);
+            await DeletePhoneCustomerAsync(verified);
+        }
+    }
+
+    [Test]
+    public async Task GetCustomerByPhoneReturnsNullWhenMultipleUnverifiedSharePhone()
+    {
+        var phone = "+15550001003";
+        var first = await InsertPhoneCustomerAsync("phone-dup-1@test.com", phone, verified: false);
+        var second = await InsertPhoneCustomerAsync("phone-dup-2@test.com", phone, verified: false);
+
+        try
+        {
+            var found = await _customerService.GetCustomerByPhoneAsync(phone);
+            found.Should().BeNull();
+
+            var taken = await _customerService.IsAlreadyExistsVerifiedPhoneNumberAsync(null, phone);
+            taken.Should().BeTrue();
+        }
+        finally
+        {
+            await DeletePhoneCustomerAsync(first);
+            await DeletePhoneCustomerAsync(second);
+        }
+    }
+
+    [Test]
+    public async Task PhoneUniquenessTreatsUnverifiedNumbersAsTaken()
+    {
+        var phone = "+15550001004";
+        var existing = await InsertPhoneCustomerAsync("phone-taken@test.com", phone, verified: false);
+        var other = await InsertPhoneCustomerAsync("phone-other@test.com", "+15550001999", verified: false);
+
+        try
+        {
+            var takenByOther = await _customerService.IsAlreadyExistsVerifiedPhoneNumberAsync(other, phone);
+            takenByOther.Should().BeTrue();
+
+            var takenWhenCreating = await _customerService.IsAlreadyExistsVerifiedPhoneNumberAsync(null, phone);
+            takenWhenCreating.Should().BeTrue();
+
+            var ownNumber = await _customerService.IsAlreadyExistsVerifiedPhoneNumberAsync(existing, phone);
+            ownNumber.Should().BeFalse();
+        }
+        finally
+        {
+            await DeletePhoneCustomerAsync(existing);
+            await DeletePhoneCustomerAsync(other);
+        }
+    }
+
+    private async Task<Customer> InsertPhoneCustomerAsync(string email, string phone, bool verified)
+    {
+        var customer = new Customer
+        {
+            Email = email,
+            Username = email,
+            Active = true,
+            Phone = phone,
+            PhoneSmsVerified = verified,
+            CreatedOnUtc = DateTime.UtcNow,
+            LastActivityDateUtc = DateTime.UtcNow
+        };
+
+        await _customerService.InsertCustomerAsync(customer);
+        return customer;
+    }
+
+    private async Task DeletePhoneCustomerAsync(Customer customer)
+    {
+        customer.Username = customer.Email = string.Empty;
+        customer.Phone = string.Empty;
+        customer.Active = false;
+        await _customerService.UpdateCustomerAsync(customer);
+        await _customerService.DeleteCustomerAsync(customer);
+    }
 }
