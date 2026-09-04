@@ -661,7 +661,7 @@ public class LocalizationMigration : MigrationBase
             ["PageTitle.RegisterOtp"] = "Phone number verification",
             ["PageTitle.LoginOtp"] = "Phone number verification",
 
-            ["Account.IsAlreadyExistsVerifiedPhoneNumber"] = "A customer with the specified verified phone number already exists.",
+            ["Account.IsAlreadyExistsVerifiedPhoneNumber"] = "A customer with the specified phone number already exists.",
             ["Account.Register.OtpRegisterSmsText"] = "We'll send you a code via SMS to complete registration.",
             ["Account.OtpPhoneVerification.OtpUpdatePhoneSmsText"] = "We'll send you a code via SMS to confirm changing your phone number.",
             ["Account.Login.OtpLoginSmsText"] = "We'll send you a code via SMS to confirm your login.",

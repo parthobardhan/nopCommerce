@@ -222,6 +222,22 @@ public partial class CustomerController : BasePublicController
         }
     }
 
+    /// <summary>
+    /// Resolves which customer an OTP should be stored on / verified against.
+    /// A signed-in customer confirming their own number must not inherit another account's OTP context.
+    /// </summary>
+    protected virtual async Task<Customer> GetOtpTargetCustomerAsync(string phoneNumber)
+    {
+        var currentCustomer = await _workContext.GetCurrentCustomerAsync();
+        if (currentCustomer != null
+            && !string.IsNullOrEmpty(currentCustomer.Phone)
+            && string.Equals(currentCustomer.Phone, phoneNumber, StringComparison.Ordinal)
+            && await _customerService.IsRegisteredAsync(currentCustomer))
+            return currentCustomer;
+
+        return await _customerService.GetCustomerByPhoneAsync(phoneNumber);
+    }
+
     protected virtual void ValidateRequiredConsents(List<GdprConsent> consents, IFormCollection form)
     {
         foreach (var consent in consents)
@@ -575,7 +591,7 @@ public partial class CustomerController : BasePublicController
 
         // Check if customer exists with this phone
         var phoneNumber = FormatPhoneNumber(phone);
-        var customer = await _customerService.GetCustomerByPhoneAsync(phoneNumber);
+        var customer = await GetOtpTargetCustomerAsync(phoneNumber);
         if (customer == null)
         {
             return Json(new { success = false, message = await _localizationService.GetResourceAsync("Account.Login.WrongCredentials") });
@@ -653,7 +669,7 @@ public partial class CustomerController : BasePublicController
         }
 
         var phoneNumber = FormatPhoneNumber(phone);
-        var customer = await _customerService.GetCustomerByPhoneAsync(phoneNumber);
+        var customer = await GetOtpTargetCustomerAsync(phoneNumber);
         if (customer == null)
         {
             return Json(new { success = false, message = await _localizationService.GetResourceAsync("Account.Login.WrongCredentials") });

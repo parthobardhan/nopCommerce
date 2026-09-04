@@ -580,36 +580,38 @@ public partial class CustomerService : ICustomerService
 
         return await _shortTermCacheManager.GetAsync(async () =>
         {
-            var query =
-                from c in _customerRepository.Table
-                where c.Active && !c.Deleted && c.Phone == phone
-                orderby c.Id
-                select c;
+            var customers = await _customerRepository.Table
+                .Where(c => c.Active && !c.Deleted && c.Phone == phone)
+                .OrderBy(c => c.Id)
+                .ToListAsync();
 
-            var customers = await query.ToListAsync();
+            var verified = customers.Where(c => c.PhoneSmsVerified).ToList();
+            if (verified.Count == 1)
+                return verified[0];
 
-            return customers.FirstOrDefault(customer => customer.PhoneSmsVerified) ?? customers.FirstOrDefault();
+            // Multiple matches with no unique verified owner — do not pick the oldest account.
+            return customers.Count == 1 ? customers[0] : null;
         }, NopCustomerServicesDefaults.CustomerByPhoneCacheKey, phone);
     }
 
     /// <summary>
-    /// Determines whether a verified phone number is already associated with a customer other than the specified
-    /// customer.
+    /// Determines whether a phone number is already associated with a customer other than the specified
+    /// customer. Unverified numbers count — phone login treats the number as an account identifier.
     /// </summary>
     /// <param name="customer">The customer</param>
     /// <param name="phone">The phone number</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains <see langword="true"/> if a
-    /// different customer with the specified verified phone number exists; otherwise, <see langword="false"/>.</returns>
+    /// different customer with the specified phone number exists; otherwise, <see langword="false"/>.</returns>
     public virtual async Task<bool> IsAlreadyExistsVerifiedPhoneNumberAsync(Customer customer, string phone)
     {
         if (string.IsNullOrWhiteSpace(phone))
             return false;
 
-        var customerByPhone = await GetCustomerByPhoneAsync(phone);
-        if (customerByPhone == null)
-            return false;
+        var query = _customerRepository.Table.Where(c => c.Active && !c.Deleted && c.Phone == phone);
+        if (customer != null)
+            query = query.Where(c => c.Id != customer.Id);
 
-        return (customer?.Id != customerByPhone.Id) && customerByPhone.PhoneSmsVerified;
+        return await query.AnyAsync();
     }
 
     /// <summary>

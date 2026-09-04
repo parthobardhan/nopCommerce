@@ -198,13 +198,13 @@ public partial interface ICustomerService
     Task<Customer> GetCustomerByPhoneAsync(string phone);
 
     /// <summary>
-    /// Determines whether a verified phone number is already associated with a customer other than the specified
-    /// customer.
+    /// Determines whether a phone number is already associated with a customer other than the specified
+    /// customer. Unverified numbers count — phone login treats the number as an account identifier.
     /// </summary>
     /// <param name="customer">The customer</param>
     /// <param name="phone">The phone number</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains <see langword="true"/> if a
-    /// different customer with the specified verified phone number exists; otherwise, <see langword="false"/>.</returns>
+    /// different customer with the specified phone number exists; otherwise, <see langword="false"/>.</returns>
     Task<bool> IsAlreadyExistsVerifiedPhoneNumberAsync(Customer customer, string phone);
 
     /// <summary>
