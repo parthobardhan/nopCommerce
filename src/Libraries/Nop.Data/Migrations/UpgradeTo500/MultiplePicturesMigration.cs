@@ -21,7 +21,6 @@ public class MultiplePicturesMigration : ForwardOnlyMigration
     /// </summary>
     public override void Up()
     {
-        int pageIndex;
         var pageSize = 500;
 
         var pac = Schema.Table(nameof(ProductAttributeCombination));
@@ -34,11 +33,14 @@ public class MultiplePicturesMigration : ForwardOnlyMigration
                 join p in _dataProvider.GetTable<Picture>() on c.PictureId equals p.Id
                 select c;
 
-            pageIndex = 0;
-
+            // Always take the first remaining page. PictureId is nulled after each
+            // copy so those rows drop out of the join; Skip(page * size) would
+            // jump over unmigrated rows. UpdateEntities must be sync — the async
+            // overload was discarded, so PictureId could be cleared (or the column
+            // dropped) while later pages were still being read.
             while (true)
             {
-                var combinations = combinationQuery.Skip(pageIndex * pageSize).Take(pageSize).ToList();
+                var combinations = combinationQuery.Take(pageSize).ToList();
 
                 if (!combinations.Any())
                     break;
@@ -54,9 +56,7 @@ public class MultiplePicturesMigration : ForwardOnlyMigration
                     combination.PictureId = null;
                 }
 
-                _dataProvider.UpdateEntitiesAsync(combinations);
-
-                pageIndex++;
+                _dataProvider.UpdateEntities(combinations);
             }
 
             this.DeleteColumnsIfExists<ProductAttributeCombination>(["PictureId"]);
@@ -71,11 +71,9 @@ public class MultiplePicturesMigration : ForwardOnlyMigration
                 join p in _dataProvider.GetTable<Picture>() on c.PictureId equals p.Id
                 select c;
 
-            pageIndex = 0;
-
             while (true)
             {
-                var values = valueQuery.Skip(pageIndex * pageSize).Take(pageSize).ToList();
+                var values = valueQuery.Take(pageSize).ToList();
 
                 if (!values.Any())
                     break;
@@ -91,9 +89,7 @@ public class MultiplePicturesMigration : ForwardOnlyMigration
                     value.PictureId = null;
                 }
 
-                _dataProvider.UpdateEntitiesAsync(values);
-
-                pageIndex++;
+                _dataProvider.UpdateEntities(values);
             }
 
             this.DeleteColumnsIfExists<ProductAttributeValue>(["PictureId"]);
