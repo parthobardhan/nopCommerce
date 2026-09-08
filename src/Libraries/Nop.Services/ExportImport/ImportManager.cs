@@ -1762,7 +1762,8 @@ public partial class ImportManager : IImportManager
             return;
 
         var sku = priceListItemManager.GetDefaultProperty(nameof(Product.Sku)).StringValue;
-        var manualPrice = priceListItemManager.GetDefaultProperty(nameof(PriceListItem.ManualPrice)).DecimalValue;
+        // blank cells must stay null so adjustment-based lists are not imported as $0
+        var manualPrice = priceListItemManager.GetDefaultProperty(nameof(PriceListItem.ManualPrice)).DecimalValueNullable;
 
         var priceListItemProduct = await _productService.GetProductBySkuAsync(sku);
         var priceListItem = (await _priceListService.GetPriceListItemsByPriceListIdAsync(lastLoadedPriceList.Id))
