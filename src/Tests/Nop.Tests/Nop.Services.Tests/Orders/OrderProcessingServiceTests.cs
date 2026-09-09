@@ -1,9 +1,16 @@
 ﻿using AwesomeAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using Nop.Core;
 using Nop.Core.Domain.Catalog;
+using Nop.Core.Domain.Common;
 using Nop.Core.Domain.Orders;
 using Nop.Core.Domain.Payments;
 using Nop.Core.Domain.Shipping;
 using Nop.Data;
+using Nop.Services.Catalog;
+using Nop.Services.Common;
+using Nop.Services.Configuration;
+using Nop.Services.Customers;
 using Nop.Services.Orders;
 using Nop.Services.Payments;
 using Nop.Tests.Nop.Services.Tests.Payments;
@@ -694,5 +701,90 @@ public class OrderProcessingServiceTests : ServiceTest
         await _orderService.InsertRecurringPaymentHistoryAsync(new RecurringPaymentHistory { RecurringPaymentId = rp.Id });
         cyclesRemaining = await _orderProcessingService.GetCyclesRemainingAsync(rp);
         cyclesRemaining.Should().Be(0);
+    }
+
+    [Test]
+    public async Task CanPlaceOrderWhenProductIsTaxExempt()
+    {
+        var productService = GetService<IProductService>();
+        var shoppingCartService = GetService<IShoppingCartService>();
+        var customerService = GetService<ICustomerService>();
+        var addressService = GetService<IAddressService>();
+        var settingService = GetService<ISettingService>();
+        var paymentSettings = GetService<PaymentSettings>();
+        var customer = await GetService<IWorkContext>().GetCurrentCustomerAsync();
+
+        paymentSettings.ActivePaymentMethodSystemNames.Add("Payments.TestMethod");
+        await settingService.SaveSettingAsync(paymentSettings);
+
+        var product = new Product
+        {
+            Name = "Tax-exempt digital product",
+            Price = 25M,
+            Published = true,
+            VisibleIndividually = true,
+            IsTaxExempt = true,
+            IsShipEnabled = false,
+            ProductType = ProductType.SimpleProduct,
+            OrderMinimumQuantity = 1,
+            OrderMaximumQuantity = 10000
+        };
+        await productService.InsertProductAsync(product);
+
+        var address = new Address
+        {
+            Email = NopTestsDefaults.AdminEmail,
+            CountryId = 1,
+            FirstName = "John",
+            LastName = "Smith",
+            Address1 = "1 Test St",
+            City = "New York",
+            ZipPostalCode = "10001"
+        };
+        await addressService.InsertAddressAsync(address);
+        await customerService.InsertCustomerAddressAsync(customer, address);
+        customer.BillingAddressId = address.Id;
+        await customerService.UpdateCustomerAsync(customer);
+
+        var addToCartWarnings = await shoppingCartService.AddToCartAsync(customer, product, ShoppingCartType.ShoppingCart, 1);
+        addToCartWarnings.Should().BeEmpty();
+
+        try
+        {
+            var request = new ProcessPaymentRequest
+            {
+                CustomerId = customer.Id,
+                StoreId = 1,
+                PaymentMethodSystemName = "Payments.TestMethod"
+            };
+
+            using var scope = ServiceProvider.CreateScope();
+            var orderProcessingService = GetService<IOrderProcessingService>(scope);
+            var result = await orderProcessingService.PlaceOrderAsync(request);
+
+            result.Errors.Should().BeEmpty(string.Join("; ", result.Errors));
+            result.Success.Should().BeTrue();
+            result.PlacedOrder.Should().NotBeNull();
+
+            var orderItems = await _orderService.GetOrderItemsAsync(result.PlacedOrder.Id);
+            orderItems.Should().ContainSingle();
+            orderItems[0].PriceExclTax.Should().Be(25M);
+            orderItems[0].PriceInclTax.Should().Be(25M);
+        }
+        finally
+        {
+            var cart = await shoppingCartService.GetShoppingCartAsync(customer, ShoppingCartType.ShoppingCart);
+            foreach (var item in cart)
+                await shoppingCartService.DeleteShoppingCartItemAsync(item);
+
+            customer.BillingAddressId = null;
+            await customerService.UpdateCustomerAsync(customer);
+            await customerService.RemoveCustomerAddressAsync(customer, address);
+            await addressService.DeleteAddressAsync(address);
+            await productService.DeleteProductAsync(product);
+
+            paymentSettings.ActivePaymentMethodSystemNames.Remove("Payments.TestMethod");
+            await settingService.SaveSettingAsync(paymentSettings);
+        }
     }
 }
