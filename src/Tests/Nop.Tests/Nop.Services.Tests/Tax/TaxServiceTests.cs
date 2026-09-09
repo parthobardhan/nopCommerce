@@ -135,10 +135,12 @@ public class TaxServiceTests : ServiceTest
         //not taxable
         customer.IsTaxExempt = true;
 
-        var (price, _) = await _taxService.GetProductPriceAsync(product, 0, 1000M, true, customer, true);
+        var (price, taxRateResult) = await _taxService.GetProductPriceAsync(product, 0, 1000M, true, customer, true);
         price.Should().Be(909.0909090909090909090909091M);
-        (price, _) = await _taxService.GetProductPriceAsync(product, 0, 1000M, true, customer, false);
+        taxRateResult.TotalTaxRate.Should().Be(0);
+        (price, taxRateResult) = await _taxService.GetProductPriceAsync(product, 0, 1000M, true, customer, false);
         price.Should().Be(1000);
+        taxRateResult.TotalTaxRate.Should().Be(0);
         (price, _) = await _taxService.GetProductPriceAsync(product, 0, 1000M, false, customer, true);
         price.Should().Be(909.0909090909090909090909091M);
         (price, _) = await _taxService.GetProductPriceAsync(product, 0, 1000M, false, customer, false);

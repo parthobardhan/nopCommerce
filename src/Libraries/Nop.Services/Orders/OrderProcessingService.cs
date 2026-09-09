@@ -1309,17 +1309,23 @@ public partial class OrderProcessingService : IOrderProcessingService
 
             var taxRates = new TaxRateResult();
             var taxAmount = scSubTotalInclTax.price - scSubTotalExclTax.price;
+            var totalTaxRate = scSubTotalExclTax.taxRateResult.TotalTaxRate;
 
-            var amountPart = taxAmount / scSubTotalExclTax.taxRateResult.TotalTaxRate;
-
-            foreach (var taxResult in scSubTotalExclTax.taxRateResult.TaxDefinitions)
+            // Tax-exempt and $0 lines use DefaultTaxRateResult (TotalTaxRate = 0).
+            // Payment already succeeded; dividing here used to abort PlaceOrder on a half-written order.
+            if (totalTaxRate > decimal.Zero)
             {
-                var taxValue = taxResult.TaxRate * amountPart;
+                var amountPart = taxAmount / totalTaxRate;
 
-                if (_shoppingCartSettings.RoundPricesDuringCalculation)
-                    taxValue = await _priceCalculationService.RoundPriceAsync(taxValue);
-                
-                taxRates.AddTaxAmount(taxResult, taxValue);
+                foreach (var taxResult in scSubTotalExclTax.taxRateResult.TaxDefinitions)
+                {
+                    var taxValue = taxResult.TaxRate * amountPart;
+
+                    if (_shoppingCartSettings.RoundPricesDuringCalculation)
+                        taxValue = await _priceCalculationService.RoundPriceAsync(taxValue);
+
+                    taxRates.AddTaxAmount(taxResult, taxValue);
+                }
             }
 
             //save order item

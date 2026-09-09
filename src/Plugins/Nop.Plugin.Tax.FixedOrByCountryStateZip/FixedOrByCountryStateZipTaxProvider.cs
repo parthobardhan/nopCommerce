@@ -208,7 +208,14 @@ public class FixedOrByCountryStateZipTaxProvider : BasePlugin, ITaxProvider
                 .GetShoppingCartShippingTotalAsync(taxTotalRequest.ShoppingCart, true);
             if (shippingExclTax.HasValue && shippingInclTax.HasValue)
             {
-                taxRates.AddTaxAmount(shippingInclTax.Value - shippingExclTax.Value);
+                var shippingTax = shippingInclTax.Value - shippingExclTax.Value;
+
+                // One-arg AddTaxAmount splits shipping tax across existing GST/PST lines and
+                // no-ops when TotalTaxRate is 0, which drops shipping tax on tax-exempt-only carts.
+                if (taxRates.TotalTaxRate > decimal.Zero)
+                    taxRates.AddTaxAmount(shippingTax);
+                else
+                    taxRates.AddTaxAmount(taxRate, shippingTax);
             }
         }
 
