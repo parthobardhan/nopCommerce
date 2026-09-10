@@ -93,7 +93,60 @@ public partial class ExternalAuthenticationService : IExternalAuthenticationServ
     {
         //log in guest user
         if (currentLoggedInUser == null)
-            return await _customerRegistrationService.SignInCustomerAsync(associatedUser, returnUrl);
+        {
+            var loginResult = await _customerRegistrationService.ValidateCustomerAsync(associatedUser);
+            switch (loginResult)
+            {
+                case CustomerLoginResults.Successful:
+                    return await _customerRegistrationService.SignInCustomerAsync(associatedUser, returnUrl);
+
+                case CustomerLoginResults.MultiFactorAuthenticationRequired:
+                    var session = _httpContextAccessor.HttpContext?.Session;
+                    if (session == null)
+                    {
+                        return await ErrorAuthenticationAsync(new[]
+                        {
+                            await _localizationService.GetResourceAsync("Account.Login.WrongCredentials")
+                        }, returnUrl);
+                    }
+
+                    var userNameOrEmail = _customerSettings.UsernamesEnabled
+                        ? associatedUser.Username
+                        : associatedUser.Email;
+                    await session.SetAsync(NopCustomerDefaults.CustomerMultiFactorAuthenticationInfo,
+                        new CustomerMultiFactorAuthenticationInfo
+                        {
+                            UserName = userNameOrEmail,
+                            ReturnUrl = returnUrl
+                        });
+
+                    return new RedirectToRouteResult(NopRouteNames.Standard.MULTIFACTOR_VERIFICATION, null);
+
+                case CustomerLoginResults.Deleted:
+                    return await ErrorAuthenticationAsync(new[]
+                    {
+                        await _localizationService.GetResourceAsync("Account.Login.WrongCredentials.Deleted")
+                    }, returnUrl);
+
+                case CustomerLoginResults.NotActive:
+                    return await ErrorAuthenticationAsync(new[]
+                    {
+                        await _localizationService.GetResourceAsync("Account.Login.WrongCredentials.NotActive")
+                    }, returnUrl);
+
+                case CustomerLoginResults.LockedOut:
+                    return await ErrorAuthenticationAsync(new[]
+                    {
+                        await _localizationService.GetResourceAsync("Account.Login.WrongCredentials.LockedOut")
+                    }, returnUrl);
+
+                default:
+                    return await ErrorAuthenticationAsync(new[]
+                    {
+                        await _localizationService.GetResourceAsync("Account.Login.WrongCredentials")
+                    }, returnUrl);
+            }
+        }
 
         //account is already assigned to another user
         if (currentLoggedInUser.Id != associatedUser.Id)

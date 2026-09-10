@@ -81,6 +81,19 @@ public class CustomerRegistrationServiceTests : ServiceTest
     }
 
     [Test]
+    public async Task PasswordValidationRejectsLockedOutCustomers()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear);
+        customer.CannotLoginUntilDateUtc = DateTime.UtcNow.AddMinutes(10);
+        await _customerService.UpdateCustomerAsync(customer);
+
+        var result = await _customerRegistrationService.ValidateCustomerAsync("test@test.com", "password");
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.LockedOut);
+    }
+
+    [Test]
     public async Task CanValidateHashedPassword()
     {
         var result = await _customerRegistrationService.ValidateCustomerAsync(NopTestsDefaults.AdminEmail, NopTestsDefaults.AdminPassword);
@@ -124,5 +137,57 @@ public class CustomerRegistrationServiceTests : ServiceTest
         success.Success.Should().BeTrue();
 
         await DeleteCustomerAsync(customer);
+    }
+
+    [Test]
+    public async Task PasswordlessValidationRejectsLockedOutCustomers()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Hashed);
+        customer.CannotLoginUntilDateUtc = DateTime.UtcNow.AddMinutes(10);
+        await _customerService.UpdateCustomerAsync(customer);
+
+        var result = await _customerRegistrationService.ValidateCustomerAsync(customer);
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.LockedOut);
+    }
+
+    [Test]
+    public async Task PasswordlessValidationRejectsInactiveCustomers()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Hashed);
+        customer.Active = false;
+        await _customerService.UpdateCustomerAsync(customer);
+
+        var result = await _customerRegistrationService.ValidateCustomerAsync(customer);
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.NotActive);
+    }
+
+    [Test]
+    public async Task PasswordlessValidationRejectsUnregisteredCustomers()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Hashed, false);
+
+        var result = await _customerRegistrationService.ValidateCustomerAsync(customer);
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.NotRegistered);
+    }
+
+    [Test]
+    public async Task PasswordlessValidationSucceedsForRegisteredCustomers()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Hashed);
+
+        var result = await _customerRegistrationService.ValidateCustomerAsync(customer);
+        var reloaded = await _customerService.GetCustomerByIdAsync(customer.Id);
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.Successful);
+        reloaded.CannotLoginUntilDateUtc.Should().BeNull();
+        reloaded.FailedLoginAttempts.Should().Be(0);
+        reloaded.LastLoginDateUtc.Should().NotBeNull();
     }
 }
