@@ -122,25 +122,16 @@ public partial class CustomerRegistrationService : ICustomerRegistrationService
         return customerPassword.Password.Equals(savedPassword);
     }
 
-    #endregion
-
-    #region Methods
-
     /// <summary>
-    /// Validate customer
+    /// Check deleted / inactive / unregistered / locked-out state before authentication
     /// </summary>
-    /// <param name="usernameOrEmail">Username or email</param>
-    /// <param name="password">Password</param>
+    /// <param name="customer">Customer</param>
     /// <returns>
     /// A task that represents the asynchronous operation
-    /// The task result contains the result
+    /// The task result contains the identity check result
     /// </returns>
-    public virtual async Task<CustomerLoginResults> ValidateCustomerAsync(string usernameOrEmail, string password)
+    protected virtual async Task<CustomerLoginResults> GetCustomerIdentityLoginResultAsync(Customer customer)
     {
-        var customer = _customerSettings.UsernamesEnabled ?
-            await _customerService.GetCustomerByUsernameAsync(usernameOrEmail) :
-            await _customerService.GetCustomerByEmailAsync(usernameOrEmail);
-
         if (customer == null)
             return CustomerLoginResults.CustomerNotExist;
         if (customer.Deleted)
@@ -154,24 +145,19 @@ public partial class CustomerRegistrationService : ICustomerRegistrationService
         if (customer.CannotLoginUntilDateUtc.HasValue && customer.CannotLoginUntilDateUtc.Value > DateTime.UtcNow)
             return CustomerLoginResults.LockedOut;
 
-        if (!PasswordsMatch(await _customerService.GetCurrentPasswordAsync(customer.Id), password))
-        {
-            //wrong password
-            customer.FailedLoginAttempts++;
-            if (_customerSettings.FailedPasswordAllowedAttempts > 0 &&
-                customer.FailedLoginAttempts >= _customerSettings.FailedPasswordAllowedAttempts)
-            {
-                //lock out
-                customer.CannotLoginUntilDateUtc = DateTime.UtcNow.AddMinutes(_customerSettings.FailedPasswordLockoutMinutes);
-                //reset the counter
-                customer.FailedLoginAttempts = 0;
-            }
+        return CustomerLoginResults.Successful;
+    }
 
-            await _customerService.UpdateCustomerAsync(customer);
-
-            return CustomerLoginResults.WrongPassword;
-        }
-
+    /// <summary>
+    /// Check MFA and record a successful login when no second factor is required
+    /// </summary>
+    /// <param name="customer">Customer</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains the MFA / success result
+    /// </returns>
+    protected virtual async Task<CustomerLoginResults> CompleteCustomerLoginValidationAsync(Customer customer)
+    {
         var selectedProvider = await _permissionService.AuthorizeAsync(StandardPermission.Security.ENABLE_MULTI_FACTOR_AUTHENTICATION, customer)
             ? await _genericAttributeService.GetAttributeAsync<string>(customer, NopCustomerDefaults.SelectedMultiFactorAuthenticationProviderAttribute)
             : null;
@@ -191,6 +177,67 @@ public partial class CustomerRegistrationService : ICustomerRegistrationService
         await _customerService.UpdateCustomerAsync(customer);
 
         return CustomerLoginResults.Successful;
+    }
+
+    #endregion
+
+    #region Methods
+
+    /// <summary>
+    /// Validate customer
+    /// </summary>
+    /// <param name="usernameOrEmail">Username or email</param>
+    /// <param name="password">Password</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains the result
+    /// </returns>
+    public virtual async Task<CustomerLoginResults> ValidateCustomerAsync(string usernameOrEmail, string password)
+    {
+        var customer = _customerSettings.UsernamesEnabled ?
+            await _customerService.GetCustomerByUsernameAsync(usernameOrEmail) :
+            await _customerService.GetCustomerByEmailAsync(usernameOrEmail);
+
+        var identityResult = await GetCustomerIdentityLoginResultAsync(customer);
+        if (identityResult != CustomerLoginResults.Successful)
+            return identityResult;
+
+        if (!PasswordsMatch(await _customerService.GetCurrentPasswordAsync(customer.Id), password))
+        {
+            //wrong password
+            customer.FailedLoginAttempts++;
+            if (_customerSettings.FailedPasswordAllowedAttempts > 0 &&
+                customer.FailedLoginAttempts >= _customerSettings.FailedPasswordAllowedAttempts)
+            {
+                //lock out
+                customer.CannotLoginUntilDateUtc = DateTime.UtcNow.AddMinutes(_customerSettings.FailedPasswordLockoutMinutes);
+                //reset the counter
+                customer.FailedLoginAttempts = 0;
+            }
+
+            await _customerService.UpdateCustomerAsync(customer);
+
+            return CustomerLoginResults.WrongPassword;
+        }
+
+        return await CompleteCustomerLoginValidationAsync(customer);
+    }
+
+    /// <summary>
+    /// Validate a customer for sign-in without a password (external authentication)
+    /// </summary>
+    /// <param name="customer">Customer to validate</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains the result
+    /// </returns>
+    public virtual async Task<CustomerLoginResults> ValidateCustomerAsync(Customer customer)
+    {
+        var identityResult = await GetCustomerIdentityLoginResultAsync(customer);
+        if (identityResult != CustomerLoginResults.Successful)
+            return identityResult;
+
+        return await CompleteCustomerLoginValidationAsync(customer);
     }
 
 
