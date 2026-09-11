@@ -571,15 +571,13 @@ public partial class DiscountService : IDiscountService
                 break;
             case DiscountLimitationType.NTimesPerCustomer:
             {
-                if (await _customerService.IsRegisteredAsync(customer))
+                // Guest CustomerId is stable (cookie) and usage history is written for their orders.
+                var usedTimes = (await GetAllDiscountUsageHistoryAsync(discount.Id, customer.Id, null, false, 0, 1)).TotalCount;
+                if (usedTimes >= discount.LimitationTimes)
                 {
-                    var usedTimes = (await GetAllDiscountUsageHistoryAsync(discount.Id, customer.Id, null, false, 0, 1)).TotalCount;
-                    if (usedTimes >= discount.LimitationTimes)
-                    {
-                        result.Errors = new List<string> { await _localizationService.GetResourceAsync("ShoppingCart.Discount.CannotBeUsedAnymore") };
+                    result.Errors = new List<string> { await _localizationService.GetResourceAsync("ShoppingCart.Discount.CannotBeUsedAnymore") };
 
-                        return result;
-                    }
+                    return result;
                 }
             }
 

@@ -1,7 +1,11 @@
 ﻿using AwesomeAssertions;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Domain.Discounts;
+using Nop.Core.Domain.Orders;
+using Nop.Data;
+using Nop.Services.Customers;
 using Nop.Services.Discounts;
+using Nop.Services.Orders;
 using NUnit.Framework;
 
 namespace Nop.Tests.Nop.Services.Tests.Discounts;
@@ -11,12 +15,16 @@ public class DiscountServiceTests : ServiceTest
 {
     private IDiscountPluginManager _discountPluginManager;
     private IDiscountService _discountService;
+    private ICustomerService _customerService;
+    private IOrderService _orderService;
 
     [OneTimeSetUp]
     public void SetUp()
     {
         _discountPluginManager = GetService<IDiscountPluginManager>();
         _discountService = GetService<IDiscountService>();
+        _customerService = GetService<ICustomerService>();
+        _orderService = GetService<IOrderService>();
     }
 
     [Test]
@@ -215,6 +223,127 @@ public class DiscountServiceTests : ServiceTest
         {
             await _discountService.DeleteDiscountRequirementAsync(groupRequirement, true);
             await _discountService.DeleteDiscountAsync(discount);
+        }
+    }
+
+    [Test]
+    public async Task ShouldAllowGuestToUseNTimesPerCustomerCouponOnce()
+    {
+        var guest = await _customerService.InsertGuestCustomerAsync();
+        var discount = CreateDiscount();
+        discount.DiscountLimitation = DiscountLimitationType.NTimesPerCustomer;
+        discount.LimitationTimes = 1;
+
+        await _discountService.InsertDiscountAsync(discount);
+
+        try
+        {
+            (await _customerService.IsRegisteredAsync(guest)).Should().BeFalse();
+
+            var result = await _discountService.ValidateDiscountAsync(discount, guest, ["CouponCode 1"]);
+            result.IsValid.Should().BeTrue();
+        }
+        finally
+        {
+            await _discountService.DeleteDiscountAsync(discount);
+            await _customerService.DeleteCustomerAsync(guest);
+        }
+    }
+
+    [Test]
+    public async Task ShouldRejectGuestReuseOfNTimesPerCustomerCoupon()
+    {
+        var guest = await _customerService.InsertGuestCustomerAsync();
+        var discount = CreateDiscount();
+        discount.DiscountLimitation = DiscountLimitationType.NTimesPerCustomer;
+        discount.LimitationTimes = 1;
+        Order order = null;
+        DiscountUsageHistory usage = null;
+
+        try
+        {
+            await _discountService.InsertDiscountAsync(discount);
+
+            order = new Order
+            {
+                OrderGuid = Guid.NewGuid(),
+                CustomOrderNumber = string.Empty,
+                CustomerId = guest.Id,
+                BillingAddressId = 1,
+                CreatedOnUtc = DateTime.UtcNow
+            };
+            await _orderService.InsertOrderAsync(order);
+
+            usage = new DiscountUsageHistory
+            {
+                DiscountId = discount.Id,
+                OrderId = order.Id,
+                CreatedOnUtc = DateTime.UtcNow
+            };
+            await _discountService.InsertDiscountUsageHistoryAsync(usage);
+
+            (await _customerService.IsRegisteredAsync(guest)).Should().BeFalse();
+
+            var result = await _discountService.ValidateDiscountAsync(discount, guest, ["CouponCode 1"]);
+            result.IsValid.Should().BeFalse();
+        }
+        finally
+        {
+            if (usage != null)
+                await _discountService.DeleteDiscountUsageHistoryAsync(usage);
+            if (order != null)
+                await GetService<IRepository<Order>>().DeleteAsync(order);
+            if (discount.Id > 0)
+                await _discountService.DeleteDiscountAsync(discount);
+            await _customerService.DeleteCustomerAsync(guest);
+        }
+    }
+
+    [Test]
+    public async Task ShouldRejectRegisteredReuseOfNTimesPerCustomerCoupon()
+    {
+        var customer = await _customerService.GetCustomerByEmailAsync(NopTestsDefaults.AdminEmail);
+        var discount = CreateDiscount();
+        discount.DiscountLimitation = DiscountLimitationType.NTimesPerCustomer;
+        discount.LimitationTimes = 1;
+        Order order = null;
+        DiscountUsageHistory usage = null;
+
+        try
+        {
+            await _discountService.InsertDiscountAsync(discount);
+
+            order = new Order
+            {
+                OrderGuid = Guid.NewGuid(),
+                CustomOrderNumber = string.Empty,
+                CustomerId = customer.Id,
+                BillingAddressId = 1,
+                CreatedOnUtc = DateTime.UtcNow
+            };
+            await _orderService.InsertOrderAsync(order);
+
+            usage = new DiscountUsageHistory
+            {
+                DiscountId = discount.Id,
+                OrderId = order.Id,
+                CreatedOnUtc = DateTime.UtcNow
+            };
+            await _discountService.InsertDiscountUsageHistoryAsync(usage);
+
+            (await _customerService.IsRegisteredAsync(customer)).Should().BeTrue();
+
+            var result = await _discountService.ValidateDiscountAsync(discount, customer, ["CouponCode 1"]);
+            result.IsValid.Should().BeFalse();
+        }
+        finally
+        {
+            if (usage != null)
+                await _discountService.DeleteDiscountUsageHistoryAsync(usage);
+            if (order != null)
+                await GetService<IRepository<Order>>().DeleteAsync(order);
+            if (discount.Id > 0)
+                await _discountService.DeleteDiscountAsync(discount);
         }
     }
 }
