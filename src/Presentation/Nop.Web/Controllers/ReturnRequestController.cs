@@ -240,10 +240,14 @@ public partial class ReturnRequestController : BasePublicController
 
         var store = await _storeContext.GetCurrentStoreAsync();
 
-        //returnable products
-        var orderItems = await _orderService.GetOrderItemsAsync(order.Id, isNotReturnable: false);
-        foreach (var orderItem in orderItems)
+        //returnable products — same filter as the form (downloadable / already requested qty)
+        var returnRequestAvailability = await _returnRequestService.GetReturnRequestAvailabilityAsync(order.Id);
+        foreach (var returnableOrderItem in returnRequestAvailability.ReturnableOrderItems ?? [])
         {
+            var orderItem = returnableOrderItem.OrderItem;
+            if (orderItem == null)
+                continue;
+
             var quantity = 0; //parse quantity
             foreach (var formKey in form.Keys)
             {
@@ -254,6 +258,7 @@ public partial class ReturnRequestController : BasePublicController
                 }
             }
 
+            quantity = returnRequestAvailability.GetAllowedReturnQuantity(orderItem.Id, quantity);
             if (quantity > 0)
             {
                 var rrr = await _returnRequestService.GetReturnRequestReasonByIdAsync(model.ReturnRequestReasonId);
