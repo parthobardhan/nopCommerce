@@ -146,8 +146,11 @@ public partial class ReturnRequestController : BaseAdminController
                     var orderItem = await _orderService.GetOrderItemByIdAsync(returnRequest.OrderItemId);
                     if (orderItem != null)
                     {
+                        // posted ReturnRequest.Quantity can be inflated; never restock more than the line purchased
+                        quantityToReturn = Math.Min(quantityToReturn, orderItem.Quantity);
+
                         var product = await _productService.GetProductByIdAsync(orderItem.ProductId);
-                        if (product != null)
+                        if (product != null && quantityToReturn > 0)
                         {
                             var productStockChangedMessage = string.Format(await _localizationService.GetResourceAsync("Admin.ReturnRequests.QuantityReturnedToStock"), quantityToReturn);
 
