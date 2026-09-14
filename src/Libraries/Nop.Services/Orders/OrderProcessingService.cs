@@ -2381,6 +2381,18 @@ public partial class OrderProcessingService : IOrderProcessingService
     }
 
     /// <summary>
+    /// Storefront cancel is limited to unpaid orders. Admin CanCancelOrder stays broader
+    /// so staff can still void paid/complete orders.
+    /// </summary>
+    public virtual bool CanCustomerCancelOrder(Order order)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+
+        return order.PaymentStatus == PaymentStatus.Pending
+            && order.OrderStatus != OrderStatus.Cancelled;
+    }
+
+    /// <summary>
     /// Cancels order
     /// </summary>
     /// <param name="order">Order</param>

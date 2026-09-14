@@ -113,6 +113,13 @@ public partial interface IOrderProcessingService
     bool CanCancelOrder(Order order);
 
     /// <summary>
+    /// Gets a value indicating whether a storefront customer may cancel the order
+    /// </summary>
+    /// <param name="order">Order</param>
+    /// <returns>A value indicating whether customer cancel is allowed</returns>
+    bool CanCustomerCancelOrder(Order order);
+
+    /// <summary>
     /// Cancels order
     /// </summary>
     /// <param name="order">Order</param>
