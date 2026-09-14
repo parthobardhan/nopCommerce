@@ -573,8 +573,7 @@ public partial class OrderModelFactory : IOrderModelFactory
         }
 
         //can user cancel the order
-        model.CanCancelOrder = order.PaymentStatus == PaymentStatus.Pending
-            && order.OrderStatus != OrderStatus.Cancelled
+        model.CanCancelOrder = _orderProcessingService.CanCustomerCancelOrder(order)
             && _orderSettings.AllowCustomersCancelOrders;
 
         //purchased products

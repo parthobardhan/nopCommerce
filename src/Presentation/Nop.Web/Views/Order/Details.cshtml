@@ -38,15 +38,9 @@
             }
             @if (Model.CanCancelOrder)
             {
-                <a id="cancel_order" href="@Url.RouteUrl("CancelOrder", new { orderId = Model.Id })" class="button-2 cancel-order-button">@T("Order.Cancel")</a>
-
-                <script asp-location="Footer">
-                    $(function() {
-                        $('#cancel_order').on('click', function() {
-                            return confirm('@T("Common.AreYouSure")');
-                        });
-                    });
-                </script>
+                <form asp-route="@NopRouteNames.Standard.CANCEL_ORDER" asp-route-orderId="@Model.Id" method="post">
+                    <button type="submit" id="cancel_order" class="button-2 cancel-order-button" onclick="return confirm('@T("Common.AreYouSure")');">@T("Order.Cancel")</button>
+                </form>
             }
         </div>
     }
