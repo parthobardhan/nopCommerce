@@ -1935,9 +1935,29 @@ public partial class ShoppingCartController : BasePublicController
     public virtual async Task<IActionResult> MoveToCustomWishlist(int shoppingCartItemId, int customWishlistId)
     {
         var customer = await _workContext.GetCurrentCustomerAsync();
+        var store = await _storeContext.GetCurrentStoreAsync();
+        var customerWishlist = await _shoppingCartService.GetShoppingCartAsync(customer, ShoppingCartType.Wishlist, store.Id, customWishlistId: 0);
+        if (customerWishlist.All(item => item.Id != shoppingCartItemId))
+        {
+            return Json(new
+            {
+                success = false,
+                message = await _localizationService.GetResourceAsync("Wishlist.NotFound")
+            });
+        }
+
         var redirectUrl = Url.RouteUrl(NopRouteNames.General.WISHLIST, new { list = customWishlistId });
         if (customWishlistId > 0)
         {
+            if (!_shoppingCartSettings.AllowMultipleWishlist)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = await _localizationService.GetResourceAsync("Wishlist.NotAllowMultipleWishlist")
+                });
+            }
+
             var wishlist = await _customWishlistService.GetCustomWishlistByIdAsync(customWishlistId);
 
             if (wishlist == null || wishlist.CustomerId != customer.Id)

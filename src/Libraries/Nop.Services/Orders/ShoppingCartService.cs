@@ -1812,11 +1812,22 @@ public partial class ShoppingCartService : IShoppingCartService
         if (shoppingCartItemFrom == null)
             return;
 
-        var customer = await _customerService.GetCustomerByIdAsync(shoppingCartItemFrom.CustomerId);
-        var product = await _productService.GetProductByIdAsync(shoppingCartItemFrom.ProductId);
-        var cart = await GetShoppingCartAsync(customer, shoppingCartItemFrom.ShoppingCartType, shoppingCartItemFrom.StoreId, product.Id, customWishlistId: wishlistId);
+        var currentCustomer = await _workContext.GetCurrentCustomerAsync();
+        if (currentCustomer == null || shoppingCartItemFrom.CustomerId != currentCustomer.Id)
+            return;
 
-        var shoppingCartItemTo = await cart.FirstOrDefaultAwaitAsync(async sci => await ShoppingCartItemIsEqualAsync(sci, product, shoppingCartItemFrom.AttributesXml, shoppingCartItemFrom.CustomerEnteredPrice, shoppingCartItemFrom.RentalStartDateUtc, shoppingCartItemFrom.RentalEndDateUtc));
+        if (shoppingCartItemFrom.ShoppingCartType != ShoppingCartType.Wishlist)
+            return;
+
+        var product = await _productService.GetProductByIdAsync(shoppingCartItemFrom.ProductId);
+        if (product == null)
+            return;
+
+        var cart = await GetShoppingCartAsync(currentCustomer, ShoppingCartType.Wishlist, shoppingCartItemFrom.StoreId, product.Id, customWishlistId: wishlistId);
+
+        var shoppingCartItemTo = await cart.FirstOrDefaultAwaitAsync(async sci =>
+            sci.Id != shoppingCartItemFrom.Id &&
+            await ShoppingCartItemIsEqualAsync(sci, product, shoppingCartItemFrom.AttributesXml, shoppingCartItemFrom.CustomerEnteredPrice, shoppingCartItemFrom.RentalStartDateUtc, shoppingCartItemFrom.RentalEndDateUtc));
 
         if (shoppingCartItemTo != null)
         {
