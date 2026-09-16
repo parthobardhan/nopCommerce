@@ -213,6 +213,20 @@ public class RfqService
         requestQuote.CustomerNotes = newCustomerNotes;
     }
 
+    /// <summary>
+    /// Parses a customer-entered unit price from the request form.
+    /// The RFQ form displays and posts working-currency amounts; stored prices are primary store currency.
+    /// </summary>
+    public async Task<decimal?> ParseRequestedUnitPriceAsync(string formValue)
+    {
+        if (!decimal.TryParse(formValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var price))
+            return null;
+
+        var workingCurrency = await _workContext.GetWorkingCurrencyAsync();
+
+        return await _currencyService.ConvertToPrimaryStoreCurrencyAsync(price, workingCurrency);
+    }
+
     private async Task SetIfExistsAsync(RequestQuoteItem requestQuoteItem, IFormCollection form, string formKey)
     {
         var key = $"{formKey}{requestQuoteItem.Id}";
@@ -229,8 +243,9 @@ public class RfqService
                     await UpdateQuantityWithLogAsync(requestQuoteItem, quantity);
                 break;
             case RfqDefaults.UNIT_PRICE_FORM_KEY:
-                if (decimal.TryParse(formValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var price) && requestQuoteItem.RequestedUnitPrice != price)
-                    await UpdateUnitPriceWithLogAsync(requestQuoteItem, price);
+                var price = await ParseRequestedUnitPriceAsync(formValue);
+                if (price.HasValue && requestQuoteItem.RequestedUnitPrice != price.Value)
+                    await UpdateUnitPriceWithLogAsync(requestQuoteItem, price.Value);
 
                 break;
         }
