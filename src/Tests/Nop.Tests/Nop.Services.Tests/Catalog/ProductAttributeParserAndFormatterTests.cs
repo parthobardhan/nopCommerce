@@ -72,6 +72,25 @@ public class ProductAttributeParserTests : ServiceTest
     }
 
     [Test]
+    public async Task ShouldIgnoreProductAttributeValuesThatBelongToAnotherMapping()
+    {
+        var mappingsWithValues = _productAttributeMappings
+            .Where(mapping => mapping.Value.Any())
+            .Take(2)
+            .ToList();
+
+        mappingsWithValues.Count.Should().BeGreaterThanOrEqualTo(2);
+
+        var targetMapping = mappingsWithValues[0].Key;
+        var foreignValue = mappingsWithValues[1].Value.First();
+
+        var attributes = _productAttributeParser.AddProductAttribute(string.Empty, targetMapping, foreignValue.Id.ToString());
+        var parsed = await _productAttributeParser.ParseProductAttributeValuesAsync(attributes);
+
+        parsed.Should().BeEmpty();
+    }
+
+    [Test]
     public async Task CanAddAndRemoveProductAttributes()
     {
         var attributes = string.Empty;

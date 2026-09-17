@@ -829,6 +829,21 @@ public partial class ShoppingCartService : IShoppingCartService
                 warnings.Add("Attribute error");
         }
 
+        // posted value ids must belong to the mapping they were submitted under
+        foreach (var attribute in attributes1)
+        {
+            if (!attribute.ShouldHaveValues())
+                continue;
+
+            var allowedValues = await _productAttributeService.GetProductAttributeValuesAsync(attribute.Id);
+            if (!allowedValues.Any())
+                continue;
+
+            var selectedValues = _productAttributeParser.ParseValues(attributesXml, attribute.Id);
+            if (selectedValues.Any(v => !string.IsNullOrWhiteSpace(v) && allowedValues.All(x => x.Id.ToString() != v)))
+                warnings.Add("Attribute error");
+        }
+
         //validate required product attributes (whether they're chosen/selected/entered)
         var attributes2 = await _productAttributeService.GetProductAttributeMappingsByProductIdAsync(product.Id);
         if (ignoreNonCombinableAttributes)
@@ -1233,6 +1248,10 @@ public partial class ShoppingCartService : IShoppingCartService
                 continue;
 
             var found = false;
+            var checkoutAttributeValues = a2.ShouldHaveValues
+                ? await _checkoutAttributeService.GetAttributeValuesAsync(a2.Id)
+                : [];
+
             //selected checkout attributes
             foreach (var a1 in attributes1)
             {
@@ -1240,6 +1259,12 @@ public partial class ShoppingCartService : IShoppingCartService
                     continue;
 
                 var attributeValuesStr = _checkoutAttributeParser.ParseValues(checkoutAttributesXml, a1.Id);
+
+                // value id must belong to this checkout attribute
+                if (a2.ShouldHaveValues && checkoutAttributeValues.Any() &&
+                    !checkoutAttributeValues.Any(x => attributeValuesStr.Contains(x.Id.ToString())))
+                    break;
+
                 foreach (var str1 in attributeValuesStr)
                 {
                     if (!string.IsNullOrEmpty(str1.Trim()))

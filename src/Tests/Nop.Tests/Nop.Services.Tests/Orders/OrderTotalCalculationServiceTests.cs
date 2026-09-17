@@ -250,6 +250,43 @@ public class OrderTotalCalculationServiceTests : ServiceTest
     }
 
     [Test]
+    public async Task ShouldNotApplyCheckoutAttributePriceFromAnotherAttribute()
+    {
+        var checkoutAttributeService = GetService<IAttributeService<CheckoutAttribute, CheckoutAttributeValue>>();
+        var parser = GetService<IAttributeParser<CheckoutAttribute, CheckoutAttributeValue>>();
+
+        var giftWrap = await checkoutAttributeService.GetAttributeByIdAsync(1);
+        var yesValue = (await checkoutAttributeService.GetAttributeValuesAsync(giftWrap.Id))
+            .First(value => value.Name == "Yes");
+
+        var decoy = new CheckoutAttribute
+        {
+            Name = "Decoy checkout attribute",
+            IsRequired = false,
+            AttributeControlType = AttributeControlType.DropdownList,
+            DisplayOrder = 99
+        };
+        await checkoutAttributeService.InsertAttributeAsync(decoy);
+
+        try
+        {
+            var swappedXml = parser.AddAttribute(string.Empty, decoy, yesValue.Id.ToString());
+            await _genericAttributeService.SaveAttributeAsync(_customer, NopCustomerDefaults.CheckoutAttributes, swappedXml, _store.Id);
+
+            var (_, _, _, _, subTotalWithoutDiscountExclTax, _, _, _) =
+                await _orderTotalCalcService.GetShoppingCartSubTotalsAsync(await GetShoppingCartAsync());
+
+            // Gift wrapping "Yes" is +$10. A value stolen from that attribute must not apply.
+            subTotalWithoutDiscountExclTax.Should().Be(207M);
+        }
+        finally
+        {
+            await _genericAttributeService.SaveAttributeAsync<string>(_customer, NopCustomerDefaults.CheckoutAttributes, null, _store.Id);
+            await checkoutAttributeService.DeleteAttributeAsync(decoy);
+        }
+    }
+
+    [Test]
     public async Task CanGetShoppingCartSubtotalDiscountExcludingTax()
     {
         await _discountService.InsertDiscountAsync(_discount);

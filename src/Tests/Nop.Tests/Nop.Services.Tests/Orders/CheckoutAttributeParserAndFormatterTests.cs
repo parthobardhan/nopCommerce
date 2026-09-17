@@ -3,6 +3,7 @@ using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Domain.Orders;
 using Nop.Services.Attributes;
+using Nop.Services.Catalog;
 using Nop.Services.Orders;
 using NUnit.Framework;
 
@@ -154,6 +155,54 @@ public class CheckoutAttributeParserAndFormatterTests : ServiceTest
         formattedAttributes.Should()
             .Be(
                 "Color: Green<br />Custom option: Option 1<br />Custom option: Option 2<br />Custom text: Some custom text goes here");
+    }
+
+    [Test]
+    public async Task ShouldIgnoreCheckoutAttributeValuesThatBelongToAnotherAttribute()
+    {
+        // Color (required) posted with a Custom option value id
+        var attributes = _checkoutAttributeParser.AddAttribute(string.Empty, _ca1, _cav21.Id.ToString());
+
+        var parsedAttributeValues = await _checkoutAttributeParser.ParseAttributeValues(attributes).ToListAsync();
+        var attributeValues = await parsedAttributeValues
+            .SelectAwait(async x => await x.values.Select(p => p.Id).ToListAsync())
+            .SelectMany(p => p.ToAsyncEnumerable())
+            .ToListAsync();
+
+        attributeValues.Should().BeEmpty();
+
+        var flatValues = await _checkoutAttributeParser.ParseAttributeValuesAsync(attributes);
+        flatValues.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task ShouldWarnWhenRequiredCheckoutAttributeUsesAnotherAttributesValue()
+    {
+        var shoppingCartService = GetService<IShoppingCartService>();
+        var productService = GetService<IProductService>();
+        var product = await productService.GetProductBySkuAsync("FR_451_RB");
+        product.Should().NotBeNull();
+
+        var cart = new List<ShoppingCartItem>
+        {
+            new() { ProductId = product.Id, Quantity = 1 }
+        };
+
+        var swapped = _checkoutAttributeParser.AddAttribute(string.Empty, _ca1, _cav21.Id.ToString());
+        var warnings = await shoppingCartService.GetShoppingCartWarningsAsync(cart, swapped, true);
+
+        warnings.Should().Contain(w =>
+            w.Contains("Color", StringComparison.OrdinalIgnoreCase) ||
+            w.Contains("Select color", StringComparison.OrdinalIgnoreCase));
+
+        var valid = _checkoutAttributeParser.AddAttribute(string.Empty, _ca1, _cav11.Id.ToString());
+        valid = _checkoutAttributeParser.AddAttribute(valid, _ca2, _cav21.Id.ToString());
+        valid = _checkoutAttributeParser.AddAttribute(valid, _ca3, "Some custom text goes here");
+
+        var validWarnings = await shoppingCartService.GetShoppingCartWarningsAsync(cart, valid, true);
+        validWarnings.Should().NotContain(w =>
+            w.Contains("Color", StringComparison.OrdinalIgnoreCase) ||
+            w.Contains("Select color", StringComparison.OrdinalIgnoreCase));
     }
 
     [Test]

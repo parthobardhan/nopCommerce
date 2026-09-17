@@ -171,6 +171,12 @@ public partial class ShoppingCartController : BasePublicController
 
     #region Utilities
 
+    protected virtual async Task<bool> IsCheckoutAttributeValueForAttributeAsync(int attributeId, int attributeValueId)
+    {
+        var attributeValue = await _checkoutAttributeService.GetAttributeValueByIdAsync(attributeValueId);
+        return attributeValue != null && attributeValue.AttributeId == attributeId;
+    }
+
     protected virtual async Task ParseAndSaveCheckoutAttributesAsync(IList<ShoppingCartItem> cart, IFormCollection form)
     {
         ArgumentNullException.ThrowIfNull(cart);
@@ -195,7 +201,8 @@ public partial class ShoppingCartController : BasePublicController
                     if (!StringValues.IsNullOrEmpty(ctrlAttributes))
                     {
                         var selectedAttributeId = int.Parse(ctrlAttributes);
-                        if (selectedAttributeId > 0)
+                        if (selectedAttributeId > 0 &&
+                            await IsCheckoutAttributeValueForAttributeAsync(attribute.Id, selectedAttributeId))
                         {
                             attributesXml = _checkoutAttributeParser.AddAttribute(attributesXml,
                                 attribute, selectedAttributeId.ToString());
@@ -212,7 +219,8 @@ public partial class ShoppingCartController : BasePublicController
                         foreach (var item in cblAttributes.ToString().Split(_separator, StringSplitOptions.RemoveEmptyEntries))
                         {
                             var selectedAttributeId = int.Parse(item);
-                            if (selectedAttributeId > 0)
+                            if (selectedAttributeId > 0 &&
+                                await IsCheckoutAttributeValueForAttributeAsync(attribute.Id, selectedAttributeId))
                             {
                                 attributesXml = _checkoutAttributeParser.AddAttribute(attributesXml,
                                     attribute, selectedAttributeId.ToString());

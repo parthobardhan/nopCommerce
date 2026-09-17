@@ -172,6 +172,15 @@ public partial class ProductAttributeParser : IProductAttributeParser
     }
 
     /// <summary>
+    /// Returns true when the value belongs to the given product attribute mapping
+    /// </summary>
+    protected virtual async Task<bool> IsProductAttributeValueForMappingAsync(int productAttributeMappingId, int productAttributeValueId)
+    {
+        var value = await _productAttributeService.GetProductAttributeValueByIdAsync(productAttributeValueId);
+        return value != null && value.ProductAttributeMappingId == productAttributeMappingId;
+    }
+
+    /// <summary>
     /// Gets product attributes in XML format
     /// </summary>
     /// <param name="product">Product</param>
@@ -199,7 +208,8 @@ public partial class ProductAttributeParser : IProductAttributeParser
                     if (!StringValues.IsNullOrEmpty(ctrlAttributes))
                     {
                         var selectedAttributeId = int.Parse(ctrlAttributes);
-                        if (selectedAttributeId > 0)
+                        if (selectedAttributeId > 0 &&
+                            await IsProductAttributeValueForMappingAsync(attribute.Id, selectedAttributeId))
                         {
                             //get quantity entered by customer
                             var quantity = 1;
@@ -223,7 +233,8 @@ public partial class ProductAttributeParser : IProductAttributeParser
                                      .Split(_separator, StringSplitOptions.RemoveEmptyEntries))
                         {
                             var selectedAttributeId = int.Parse(item);
-                            if (selectedAttributeId > 0)
+                            if (selectedAttributeId > 0 &&
+                                await IsProductAttributeValueForMappingAsync(attribute.Id, selectedAttributeId))
                             {
                                 //get quantity entered by customer
                                 var quantity = 1;
@@ -477,7 +488,7 @@ public partial class ProductAttributeParser : IProductAttributeParser
                     continue;
 
                 var value = await _productAttributeService.GetProductAttributeValueByIdAsync(attributeValueId);
-                if (value == null)
+                if (value == null || value.ProductAttributeMappingId != attribute.Id)
                     continue;
 
                 if (!string.IsNullOrEmpty(attributeValue.Item2) && int.TryParse(attributeValue.Item2, out var quantity) && quantity != value.Quantity)
