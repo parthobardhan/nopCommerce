@@ -47,8 +47,9 @@ public partial class AttributeParser<TAttribute, TAttributeValue> : IAttributePa
     /// Gets attribute values
     /// </summary>
     /// <param name="valuesStr">string value attribute identifiers</param>
+    /// <param name="attributeId">Parent attribute identifier; values that belong to another attribute are ignored</param>
     /// <returns>Attribute values</returns>
-    protected virtual async IAsyncEnumerable<TAttributeValue> GetValuesAsync(IList<string> valuesStr)
+    protected virtual async IAsyncEnumerable<TAttributeValue> GetValuesAsync(IList<string> valuesStr, int attributeId)
     {
         foreach (var valueStr in valuesStr)
         {
@@ -59,7 +60,7 @@ public partial class AttributeParser<TAttribute, TAttributeValue> : IAttributePa
                 continue;
 
             var value = await _attributeService.GetAttributeValueByIdAsync(id);
-            if (value != null)
+            if (value != null && value.AttributeId == attributeId)
                 yield return value;
         }
     }
@@ -271,7 +272,7 @@ public partial class AttributeParser<TAttribute, TAttributeValue> : IAttributePa
 
             var valuesStr = ParseValues(attributesXml, attribute.Id);
 
-            values.AddRange(await GetValuesAsync(valuesStr).ToArrayAsync());
+            values.AddRange(await GetValuesAsync(valuesStr, attribute.Id).ToArrayAsync());
         }
 
         return values;
@@ -296,7 +297,7 @@ public partial class AttributeParser<TAttribute, TAttributeValue> : IAttributePa
 
             var valuesStr = ParseValues(attributesXml, attribute.Id);
 
-            yield return (attribute, GetValuesAsync(valuesStr));
+            yield return (attribute, GetValuesAsync(valuesStr, attribute.Id));
         }
     }
 

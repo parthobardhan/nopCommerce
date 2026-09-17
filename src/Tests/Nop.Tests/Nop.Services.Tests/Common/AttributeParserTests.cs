@@ -35,21 +35,51 @@ public class AttributeParserTests : BaseNopTest
     private List<int> _checkoutAttributeIds = new();
     private List<int> _checkoutAttributeValuesIds = new();
 
+    private int _xmlAttributeId1;
+    private int _xmlAttributeId2;
+    private int _xmlValueId1;
+    private int _xmlValueId2;
+    private int _xmlExtraValueId;
+
     protected void PrepareTestData(Type attributeType)
     {
-        _attributesXml = $"<Attributes><{attributeType.Name} ID=\"1\"><{attributeType.Name}Value><Value>1</Value></{attributeType.Name}Value></{attributeType.Name}><{attributeType.Name} ID=\"2\"><{attributeType.Name}Value><Value>2</Value></{attributeType.Name}Value></{attributeType.Name}></Attributes>";
+        List<int> attributeIds;
+        List<int> valueIds;
 
         if (attributeType == typeof(CustomerAttribute))
+        {
             _parser = GetService<IAttributeParser<CustomerAttribute, CustomerAttributeValue>>();
-
-        if (attributeType == typeof(VendorAttribute))
+            attributeIds = _customerAttributeIds;
+            valueIds = _customerAttributeValuesIds;
+        }
+        else if (attributeType == typeof(VendorAttribute))
+        {
             _parser = GetService<IAttributeParser<VendorAttribute, VendorAttributeValue>>();
-
-        if (attributeType == typeof(AddressAttribute))
+            attributeIds = _vendorAttributeIds;
+            valueIds = _vendorAttributeValuesIds;
+        }
+        else if (attributeType == typeof(AddressAttribute))
+        {
             _parser = GetService<IAttributeParser<AddressAttribute, AddressAttributeValue>>();
-
-        if (attributeType == typeof(CheckoutAttribute))
+            attributeIds = _addressAttributeIds;
+            valueIds = _addressAttributeValuesIds;
+        }
+        else
+        {
             _parser = GetService<IAttributeParser<CheckoutAttribute, CheckoutAttributeValue>>();
+            attributeIds = _checkoutAttributeIds;
+            valueIds = _checkoutAttributeValuesIds;
+        }
+
+        // even indexes are optional dropdowns that have values (see SetUp)
+        _xmlAttributeId1 = attributeIds[0];
+        _xmlAttributeId2 = attributeIds[2];
+        _xmlValueId1 = valueIds[0];
+        _xmlValueId2 = valueIds[2];
+        _xmlExtraValueId = valueIds[3];
+
+        _attributesXml =
+            $"<Attributes><{attributeType.Name} ID=\"{_xmlAttributeId1}\"><{attributeType.Name}Value><Value>{_xmlValueId1}</Value></{attributeType.Name}Value></{attributeType.Name}><{attributeType.Name} ID=\"{_xmlAttributeId2}\"><{attributeType.Name}Value><Value>{_xmlValueId2}</Value></{attributeType.Name}Value></{attributeType.Name}></Attributes>";
     }
 
 
@@ -206,7 +236,7 @@ public class AttributeParserTests : BaseNopTest
     {
         PrepareTestData(attributeType);
 
-        var xml = _parser.RemoveAttribute(_attributesXml, 1) as string;
+        var xml = _parser.RemoveAttribute(_attributesXml, _xmlAttributeId1) as string;
         _xmlDoc.LoadXml(xml);
         var childNodes = _xmlDoc.SelectNodes($@"//Attributes/{attributeType.Name}");
 
@@ -229,7 +259,7 @@ public class AttributeParserTests : BaseNopTest
         var values = await _parser.ParseAttributeValuesAsync(_attributesXml);
         ((int)values.Count).Should().Be(2);
 
-        var xml = _parser.AddAttribute(_attributesXml, attribute, "3") as string;
+        var xml = _parser.AddAttribute(_attributesXml, attribute, _xmlExtraValueId.ToString()) as string;
 
         values = await _parser.ParseAttributeValuesAsync(xml);
         ((int)values.Count).Should().Be(3);
@@ -243,8 +273,8 @@ public class AttributeParserTests : BaseNopTest
     public void RemoveAttributeShouldReturnEmptyStringWhenAllChildrenIsRemoved(Type attributeType)
     {
         PrepareTestData(attributeType);
-        var xml = _parser.RemoveAttribute(_attributesXml, 1) as string;
-        xml = _parser.RemoveAttribute(xml, 2);
+        var xml = _parser.RemoveAttribute(_attributesXml, _xmlAttributeId1) as string;
+        xml = _parser.RemoveAttribute(xml, _xmlAttributeId2);
 
         xml.Should().BeEmpty();
     }
@@ -257,7 +287,7 @@ public class AttributeParserTests : BaseNopTest
     public void RemoveAttributeShouldNotChangeXmlIfAttributeValueIdNotExists(Type attributeType)
     {
         PrepareTestData(attributeType);
-        var xml = _parser.RemoveAttribute(_attributesXml, 3) as string;
+        var xml = _parser.RemoveAttribute(_attributesXml, int.MaxValue) as string;
 
         xml?.Equals(_attributesXml).Should().BeTrue();
     }
@@ -272,7 +302,7 @@ public class AttributeParserTests : BaseNopTest
         PrepareTestData(attributeType);
         var ids = _parser.ParseAttributeIds(_attributesXml) as IList<int>;
 
-        var existsId = new List<int> { 1, 2 };
+        var existsId = new List<int> { _xmlAttributeId1, _xmlAttributeId2 };
 
         ids?.Count.Should().Be(2);
         ids?.All(existsId.Contains).Should().BeTrue();
