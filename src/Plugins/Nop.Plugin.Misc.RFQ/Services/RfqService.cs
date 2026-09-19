@@ -860,8 +860,9 @@ public class RfqService
 
         await _shoppingCartService.ClearShoppingCartAsync(customer, store.Id);
 
-        //reset checkout info
-        await _customerService.ResetCheckoutDataAsync(customer, store.Id);
+        // Quote prices are locked; leftover coupons/gift cards from the previous cart
+        // would still apply at checkout because the quote cart hides those boxes.
+        await _customerService.ResetCheckoutDataAsync(customer, store.Id, clearCouponCodes: true, clearCheckoutAttributes: true);
 
         foreach (var quoteItem in quoteItems)
         {

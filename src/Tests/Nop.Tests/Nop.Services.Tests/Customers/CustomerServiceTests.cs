@@ -90,4 +90,26 @@ public class CustomerServiceTests : ServiceTest
         countAddresses.Should().Be(0);
         billingAddressId.Should().BeNull();
     }
+
+    [Test]
+    public async Task CanClearCouponCodesWhenResettingCheckoutData()
+    {
+        var customer = await _customerService.GetCustomerByEmailAsync(NopTestsDefaults.AdminEmail);
+
+        await _customerService.ApplyDiscountCouponCodeAsync(customer, "SAVE20");
+        await _customerService.ApplyGiftCardCouponCodeAsync(customer, "GIFTCARD1");
+
+        (await _customerService.ParseAppliedDiscountCouponCodesAsync(customer)).Should().Contain("save20");
+        (await _customerService.ParseAppliedGiftCardCouponCodesAsync(customer)).Should().Contain("giftcard1");
+
+        await _customerService.ResetCheckoutDataAsync(customer, 0);
+
+        (await _customerService.ParseAppliedDiscountCouponCodesAsync(customer)).Should().Contain("save20");
+        (await _customerService.ParseAppliedGiftCardCouponCodesAsync(customer)).Should().Contain("giftcard1");
+
+        await _customerService.ResetCheckoutDataAsync(customer, 0, clearCouponCodes: true);
+
+        (await _customerService.ParseAppliedDiscountCouponCodesAsync(customer)).Should().BeEmpty();
+        (await _customerService.ParseAppliedGiftCardCouponCodesAsync(customer)).Should().BeEmpty();
+    }
 }
