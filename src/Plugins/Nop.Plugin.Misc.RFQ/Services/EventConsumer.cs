@@ -245,11 +245,13 @@ public class EventConsumer : IConsumer<AdminMenuCreatedEvent>,
             return;
 
         var quoteItem = await _rfqService.GetQuoteItemByShoppingCartItemIdAsync(eventMessage.Entity.Id);
-        
-        if (quoteItem == null || eventMessage.Entity.Quantity == quoteItem.OfferedQty)
+        if (quoteItem == null)
             return;
 
-        eventMessage.Entity.Quantity = quoteItem.OfferedQty;
+        // Quote checkout keeps OfferedUnitPrice even after attributes change. The cart page
+        // hides edit, but product-details ?updatecartitemid= still updates the SCI.
+        if (!QuoteCartItemGuard.TryRestoreLockedFields(eventMessage.Entity, quoteItem))
+            return;
 
         await _shoppingCartItemsRepository.UpdateAsync(eventMessage.Entity);
     }
