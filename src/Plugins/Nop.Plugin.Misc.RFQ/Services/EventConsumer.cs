@@ -8,6 +8,7 @@ using Nop.Core.Http;
 using Nop.Data;
 using Nop.Plugin.Misc.RFQ.Domains;
 using Nop.Services.Cms;
+using Nop.Services.Customers;
 using Nop.Services.Events;
 using Nop.Services.Localization;
 using Nop.Services.Orders;
@@ -26,10 +27,12 @@ public class EventConsumer : IConsumer<AdminMenuCreatedEvent>,
     IConsumer<ModelPreparedEvent<BaseNopModel>>,
     IConsumer<EntityInsertedEvent<ShoppingCartItem>>,
     IConsumer<EntityUpdatedEvent<ShoppingCartItem>>,
+    IConsumer<EntityDeletedEvent<ShoppingCartItem>>,
     IConsumer<ShoppingCartItemMovedToOrderItemEvent>
 {
     #region Fields
 
+    private readonly ICustomerService _customerService;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILocalizationService _localizationService;
     private readonly IRepository<ShoppingCartItem> _shoppingCartItemsRepository;
@@ -45,7 +48,8 @@ public class EventConsumer : IConsumer<AdminMenuCreatedEvent>,
 
     #region Ctor
 
-    public EventConsumer(IHttpContextAccessor httpContextAccessor,
+    public EventConsumer(ICustomerService customerService,
+        IHttpContextAccessor httpContextAccessor,
         ILocalizationService localizationService,
         IRepository<ShoppingCartItem> shoppingCartItemsRepository,
         IShoppingCartService shoppingCartService,
@@ -56,6 +60,7 @@ public class EventConsumer : IConsumer<AdminMenuCreatedEvent>,
         RfqService rfqService,
         RfqSettings rfqSettings)
     {
+        _customerService = customerService;
         _httpContextAccessor = httpContextAccessor;
         _localizationService = localizationService;
         _pluginManager = pluginManager;
@@ -193,14 +198,26 @@ public class EventConsumer : IConsumer<AdminMenuCreatedEvent>,
         var quoteItems =
             await _rfqService.GetQuoteItemsByShoppingCartItemIdsAsync(cart.Select(sci => sci.Id).ToArray());
 
+        if (!quoteItems.Any())
+            return;
+
+        // Unlink before delete so the delete handler does not restore these lines.
+        // Adding a catalog product replaces an in-progress quote cart (exclusive cart).
+        var shoppingCartItemIds = quoteItems
+            .Where(quoteItem => quoteItem.ShoppingCartItemId.HasValue)
+            .Select(quoteItem => quoteItem.ShoppingCartItemId!.Value)
+            .ToList();
+
         foreach (var quoteItem in quoteItems)
         {
-            await _shoppingCartService.DeleteShoppingCartItemAsync(quoteItem.ShoppingCartItemId!.Value);
             _shortTermCacheManager.Remove(RfqDefaults.QuoteItemByShoppingCartItemCacheKey.Key, quoteItem.ShoppingCartItemId);
             quoteItem.ShoppingCartItemId = null;
         }
 
         await _rfqService.UpdateQuoteItemsAsync(quoteItems);
+
+        foreach (var shoppingCartItemId in shoppingCartItemIds)
+            await _shoppingCartService.DeleteShoppingCartItemAsync(shoppingCartItemId);
     }
 
     /// <summary>
@@ -245,13 +262,42 @@ public class EventConsumer : IConsumer<AdminMenuCreatedEvent>,
             return;
 
         var quoteItem = await _rfqService.GetQuoteItemByShoppingCartItemIdAsync(eventMessage.Entity.Id);
-        
-        if (quoteItem == null || eventMessage.Entity.Quantity == quoteItem.OfferedQty)
+
+        if (!QuoteCartLock.TryRevertUnauthorizedChange(eventMessage.Entity, quoteItem))
             return;
 
-        eventMessage.Entity.Quantity = quoteItem.OfferedQty;
-
         await _shoppingCartItemsRepository.UpdateAsync(eventMessage.Entity);
+    }
+
+    /// <summary>
+    /// Restore a quote cart line after an unauthorized delete (qty 0 / removefromcart).
+    /// Clearing the cart (exit quote, create-order, place-order) does not publish this event.
+    /// </summary>
+    public async Task HandleEventAsync(EntityDeletedEvent<ShoppingCartItem> eventMessage)
+    {
+        if (!_rfqSettings.Enabled)
+            return;
+
+        var deletedItem = eventMessage.Entity;
+        var quoteItem = await _rfqService.GetQuoteItemByShoppingCartItemIdAsync(deletedItem.Id);
+
+        if (quoteItem == null || !QuoteCartLock.ShouldRestoreDeletedCartItem(quoteItem, deletedItem))
+            return;
+
+        var restoredItem = QuoteCartLock.CreateRestoredCartItem(deletedItem, quoteItem.OfferedQty);
+
+        await _shoppingCartItemsRepository.InsertAsync(restoredItem, false);
+
+        _shortTermCacheManager.Remove(RfqDefaults.QuoteItemByShoppingCartItemCacheKey.Key, deletedItem.Id);
+        quoteItem.ShoppingCartItemId = restoredItem.Id;
+        await _rfqService.UpdateQuoteItemsAsync(new List<QuoteItem> { quoteItem });
+
+        var customer = await _customerService.GetCustomerByIdAsync(deletedItem.CustomerId);
+        if (customer != null && !customer.HasShoppingCartItems)
+        {
+            customer.HasShoppingCartItems = true;
+            await _customerService.UpdateCustomerAsync(customer);
+        }
     }
 
     #endregion

@@ -29,6 +29,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\Plugins\Nop.Plugin.Misc.RFQ\Services\QuoteCartLock.cs" Link="Nop.Plugin.Tests\Misc.RFQ\QuoteCartLock.cs" />
+    <Compile Include="..\..\Plugins\Nop.Plugin.Misc.RFQ\Domains\QuoteItem.cs" Link="Nop.Plugin.Tests\Misc.RFQ\QuoteItem.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Update="Connections.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Connections.Designer.cs</LastGenOutput>
