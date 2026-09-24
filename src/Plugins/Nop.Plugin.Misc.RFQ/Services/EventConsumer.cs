@@ -124,6 +124,10 @@ public class EventConsumer : IConsumer<AdminMenuCreatedEvent>,
         if (quoteItem == null)
             return;
 
+        var quote = await _rfqService.GetQuoteByIdAsync(quoteItem.QuoteId);
+        if (!RfqService.IsQuoteHonoredAtCheckout(quote))
+            return;
+
         eventMessage.DiscountAmount = 0;
         eventMessage.AppliedDiscounts?.Clear();
         eventMessage.UnitPrice = quoteItem.OfferedUnitPrice;
@@ -147,8 +151,16 @@ public class EventConsumer : IConsumer<AdminMenuCreatedEvent>,
             if (routeName is not NopRouteNames.General.CART)
                 return;
 
-            //is shopping cart created by quote
-            if (await model.Items.AnyAwaitAsync(async shoppingCartItemModel => (await _rfqService.GetQuoteItemByShoppingCartItemIdAsync(shoppingCartItemModel.Id)) == null))
+            //is shopping cart created by a still-valid quote
+            if (await model.Items.AnyAwaitAsync(async shoppingCartItemModel =>
+            {
+                var cartQuoteItem = await _rfqService.GetQuoteItemByShoppingCartItemIdAsync(shoppingCartItemModel.Id);
+                if (cartQuoteItem == null)
+                    return true;
+
+                var cartQuote = await _rfqService.GetQuoteByIdAsync(cartQuoteItem.QuoteId);
+                return !RfqService.IsQuoteHonoredAtCheckout(cartQuote);
+            }))
                 return;
 
             var disableEdit = false;
@@ -219,6 +231,9 @@ public class EventConsumer : IConsumer<AdminMenuCreatedEvent>,
             return;
 
         var quote = await _rfqService.GetQuoteByIdAsync(quoteItem.QuoteId);
+        if (!RfqService.IsQuoteHonoredAtCheckout(quote))
+            return;
+
         quote.Status = QuoteStatus.OrderCreated;
         quote.OrderId = eventMessage.OrderItem.OrderId;
         await _rfqService.UpdateQuoteAsync(quote);
@@ -247,6 +262,10 @@ public class EventConsumer : IConsumer<AdminMenuCreatedEvent>,
         var quoteItem = await _rfqService.GetQuoteItemByShoppingCartItemIdAsync(eventMessage.Entity.Id);
         
         if (quoteItem == null || eventMessage.Entity.Quantity == quoteItem.OfferedQty)
+            return;
+
+        var quote = await _rfqService.GetQuoteByIdAsync(quoteItem.QuoteId);
+        if (!RfqService.IsQuoteHonoredAtCheckout(quote))
             return;
 
         eventMessage.Entity.Quantity = quoteItem.OfferedQty;

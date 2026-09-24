@@ -292,6 +292,22 @@ public class RfqService
         return quote;
     }
 
+    /// <summary>
+    /// Whether checkout should still honor the quoted unit price and quantity lock.
+    /// Callers should load the quote via GetQuoteByIdAsync first so an elapsed
+    /// ExpirationDateUtc is persisted as Expired.
+    /// </summary>
+    public static bool IsQuoteHonoredAtCheckout(Quote quote)
+    {
+        if (quote == null)
+            return false;
+
+        if (quote.Status == QuoteStatus.Expired)
+            return false;
+
+        return !quote.ExpirationDateUtc.HasValue || quote.ExpirationDateUtc.Value > DateTime.UtcNow;
+    }
+
     #endregion
 
     #region Methods
