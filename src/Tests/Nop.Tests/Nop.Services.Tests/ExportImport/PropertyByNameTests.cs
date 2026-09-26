@@ -95,4 +95,58 @@ public class PropertyByNameTests
         missing.DecimalValue.Should().Be(default);
         missing.DecimalValueNullable.Should().BeNull();
     }
+
+    [Test]
+    public void CanReadDateTimeCellValue()
+    {
+        var expected = new DateTime(2025, 11, 28, 15, 30, 0);
+        var property = CreateProperty((XLCellValue)expected);
+
+        property.DateTimeNullable.Should().Be(expected);
+    }
+
+    [Test]
+    public void CanReadExcelSerialDateNumberAsDateTime()
+    {
+        // Excel stores dates as serial numbers; ClosedXML keeps that type unless the
+        // cell was assigned a DateTime. Import must still recover the calendar date.
+        using var workbook = new XLWorkbook();
+        var cell = workbook.AddWorksheet("s").Cell(1, 1);
+        cell.Value = 45989;
+        cell.Style.DateFormat.Format = "yyyy-mm-dd";
+
+        var property = CreateProperty(cell.Value);
+
+        property.DateTimeNullable.Should().Be(new DateTime(2025, 11, 28));
+    }
+
+    [Test]
+    public void CanReadInvariantTextCellValueAsDateTime()
+    {
+        CreateProperty((XLCellValue)"2025-11-28").DateTimeNullable.Should().Be(new DateTime(2025, 11, 28));
+        CreateProperty((XLCellValue)"2025-11-28T15:30:00").DateTimeNullable.Should().Be(new DateTime(2025, 11, 28, 15, 30, 0));
+    }
+
+    [Test]
+    public void BlankOrInvalidDateTimeCellValueReturnsNull()
+    {
+        CreateProperty(XLCellValue.FromObject(null)).DateTimeNullable.Should().BeNull();
+        CreateProperty((XLCellValue)string.Empty).DateTimeNullable.Should().BeNull();
+        CreateProperty((XLCellValue)"not a date").DateTimeNullable.Should().BeNull();
+        CreateProperty(null).DateTimeNullable.Should().BeNull();
+    }
+
+    [Test]
+    public void ExportImportRoundTripPreservesDateTimeCell()
+    {
+        var expected = new DateTime(2025, 12, 1, 0, 0, 0);
+        using var workbook = new XLWorkbook();
+        var cell = workbook.AddWorksheet("s").Cell(1, 1);
+        cell.Value = expected;
+
+        // PropertyManager.ReadDefaultFromXlsx assigns cell.Value, which is XLCellValue
+        var property = CreateProperty(cell.Value);
+
+        property.DateTimeNullable.Should().Be(expected);
+    }
 }
