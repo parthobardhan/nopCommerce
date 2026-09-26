@@ -79,6 +79,51 @@ public partial class PropertyByName<T>
     }
 
     /// <summary>
+    /// Converts the property value to DateTime
+    /// </summary>
+    /// <param name="value">The converted value, or the default one when the value cannot be converted</param>
+    /// <returns>Whether the property value could be converted</returns>
+    protected virtual bool TryGetDateTimeValue(out DateTime value)
+    {
+        value = default;
+
+        // ClosedXML 0.100+ exposes cell.Value as XLCellValue. `as DateTime?` therefore
+        // always fails for real spreadsheet cells, which silently dropped tier-price
+        // and product date windows on import.
+        if (PropertyValue is XLCellValue cellValue)
+        {
+            if (cellValue.IsBlank)
+                return false;
+
+            if (cellValue.IsDateTime)
+            {
+                value = cellValue.GetDateTime();
+                return true;
+            }
+
+            // number cells (Excel serial dates, with or without a date format)
+            if (cellValue.TryConvert(out DateTime converted))
+            {
+                value = converted;
+                return true;
+            }
+
+            // typed text dates fail TryConvert; parse them ourselves
+            return cellValue.IsText
+                && DateTime.TryParse(cellValue.GetText(), CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
+        }
+
+        if (PropertyValue is DateTime dateTime)
+        {
+            value = dateTime;
+            return true;
+        }
+
+        return PropertyValue != null
+            && DateTime.TryParse(PropertyValue.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
+    }
+
+    /// <summary>
     /// Get item identifier
     /// </summary>
     /// <param name="name">Name</param>
@@ -247,7 +292,7 @@ public partial class PropertyByName<T>
     /// <summary>
     /// Converted property value to nullable DateTime
     /// </summary>
-    public DateTime? DateTimeNullable => string.IsNullOrWhiteSpace(StringValue) ? null : PropertyValue as DateTime?;
+    public DateTime? DateTimeNullable => TryGetDateTimeValue(out var rez) ? rez : null;
 
     /// <summary>
     /// Converted property value to guid
