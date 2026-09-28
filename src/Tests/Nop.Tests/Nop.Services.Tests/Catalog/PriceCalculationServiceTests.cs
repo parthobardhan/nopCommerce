@@ -1,11 +1,14 @@
-﻿using AwesomeAssertions;
+﻿using System.Reflection;
+using AwesomeAssertions;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Domain.Directory;
 using Nop.Core.Domain.Discounts;
+using Nop.Core.Domain.PriceLists;
 using Nop.Core.Domain.Stores;
 using Nop.Services.Catalog;
 using Nop.Services.Customers;
+using Nop.Services.PriceLists;
 using NUnit.Framework;
 
 namespace Nop.Tests.Nop.Services.Tests.Catalog;
@@ -18,6 +21,7 @@ public class PriceCalculationServiceTests : ServiceTest
     private ICustomerService _customerService;
     private IProductService _productService;
     private IPriceCalculationService _priceCalcService;
+    private IPriceListService _priceListService;
 
     #endregion
 
@@ -29,6 +33,7 @@ public class PriceCalculationServiceTests : ServiceTest
         _customerService = GetService<ICustomerService>();
         _productService = GetService<IProductService>();
         _priceCalcService = GetService<IPriceCalculationService>();
+        _priceListService = GetService<IPriceListService>();
     }
 
     #endregion
@@ -166,6 +171,82 @@ public class PriceCalculationServiceTests : ServiceTest
 
         finalPrice.Should().Be(69.99M);
         finalPriceWithoutDiscounts.Should().Be(79.99M);
+    }
+
+    [Test]
+    public async Task CachedFinalPriceDoesNotLeakCustomerSpecificPriceList()
+    {
+        var product = await _productService.GetProductBySkuAsync("BP_20_WSP");
+        var store = new Store();
+        var registeredRole = await _customerService.GetCustomerRoleBySystemNameAsync(NopCustomerDefaults.RegisteredRoleName);
+        var serviceSettings = GetCatalogSettings(_priceCalcService);
+        var previousCacheProductPrices = serviceSettings.CacheProductPrices;
+        serviceSettings.CacheProductPrices = true;
+
+        var contractCustomer = await InsertRegisteredCustomerAsync("pricelist-cache-a@test.com", registeredRole);
+        var otherCustomer = await InsertRegisteredCustomerAsync("pricelist-cache-b@test.com", registeredRole);
+
+        var priceList = new PriceList
+        {
+            Name = "Customer A contract",
+            Active = true,
+            PriceCalculationType = PriceCalculationTypeEnum.FixedPrice,
+            PriceCalculationValue = 10M,
+            Priority = 1
+        };
+        await _priceListService.InsertPriceListAsync(priceList);
+        await _priceListService.InsertPriceListItemAsync(new PriceListItem
+        {
+            PriceListId = priceList.Id,
+            ProductId = product.Id,
+            ManualPrice = 10M
+        });
+        await _priceListService.InsertPriceListCustomerAsync(new PriceListCustomer
+        {
+            PriceListId = priceList.Id,
+            CustomerId = contractCustomer.Id
+        });
+
+        try
+        {
+            var (_, contractPrice, _, _) = await _priceCalcService.GetFinalPriceAsync(product, contractCustomer, store, 0, false);
+            var (_, otherPrice, _, _) = await _priceCalcService.GetFinalPriceAsync(product, otherCustomer, store, 0, false);
+
+            contractPrice.Should().Be(10M);
+            otherPrice.Should().Be(79.99M);
+        }
+        finally
+        {
+            serviceSettings.CacheProductPrices = previousCacheProductPrices;
+            await _priceListService.DeletePriceListAsync(priceList);
+            await _customerService.DeleteCustomerAsync(contractCustomer);
+            await _customerService.DeleteCustomerAsync(otherCustomer);
+        }
+    }
+
+    private static CatalogSettings GetCatalogSettings(IPriceCalculationService priceCalculationService)
+    {
+        var field = typeof(PriceCalculationService).GetField("_catalogSettings", BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return (CatalogSettings)field.GetValue(priceCalculationService);
+    }
+
+    private async Task<Customer> InsertRegisteredCustomerAsync(string email, CustomerRole registeredRole)
+    {
+        var customer = new Customer
+        {
+            Username = email,
+            Email = email,
+            Active = true
+        };
+        await _customerService.InsertCustomerAsync(customer);
+        await _customerService.AddCustomerRoleMappingAsync(new CustomerCustomerRoleMapping
+        {
+            CustomerId = customer.Id,
+            CustomerRoleId = registeredRole.Id
+        });
+
+        return customer;
     }
 
     [TestCase(12.366, 12.37, RoundingType.Rounding001)]

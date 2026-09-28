@@ -430,7 +430,8 @@ public partial class PriceCalculationService : IPriceCalculationService
             includeDiscounts,
             quantity,
             await _customerService.GetCustomerRoleIdsAsync(customer),
-            store);
+            store,
+            customer);
 
         //we do not cache price if this not allowed by settings or if the product is rental product
         //otherwise, it can cause memory leaks (to store all possible date period combinations)
