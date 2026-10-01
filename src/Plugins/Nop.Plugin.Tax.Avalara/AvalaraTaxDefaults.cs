@@ -96,6 +96,12 @@ public class AvalaraTaxDefaults
     public static string EntityUseCodeAttribute => "AvalaraEntityUseCode";
 
     /// <summary>
+    /// Gets the name of the generic attribute that stores the address offered by checkout validation.
+    /// UseValidatedAddress must only accept this id so a crafted POST cannot attach another customer's address.
+    /// </summary>
+    public static string PendingValidatedAddressIdAttribute => "AvalaraPendingValidatedAddressId";
+
+    /// <summary>
     /// Gets the key for caching tax rate by zip code
     /// </summary>
     /// <remarks>

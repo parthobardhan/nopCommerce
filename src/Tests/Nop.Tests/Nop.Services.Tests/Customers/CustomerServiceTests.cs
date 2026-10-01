@@ -1,5 +1,6 @@
 ﻿using AwesomeAssertions;
 using Nop.Core.Domain.Customers;
+using Nop.Services.Common;
 using Nop.Services.Customers;
 using NUnit.Framework;
 
@@ -9,11 +10,13 @@ namespace Nop.Tests.Nop.Services.Tests.Customers;
 public class CustomerServiceTests : ServiceTest
 {
     private ICustomerService _customerService;
+    private IGenericAttributeService _genericAttributeService;
 
     [SetUp]
     public async Task SetUp()
     {
         _customerService = GetService<ICustomerService>();
+        _genericAttributeService = GetService<IGenericAttributeService>();
     }
 
     [Test]
@@ -89,5 +92,34 @@ public class CustomerServiceTests : ServiceTest
 
         countAddresses.Should().Be(0);
         billingAddressId.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GetCustomerAddressAsyncDoesNotReturnAnotherCustomersAddress()
+    {
+        var victim = await _customerService.GetCustomerByEmailAsync(NopTestsDefaults.AdminEmail);
+        var victimAddress = (await _customerService.GetAddressesByCustomerIdAsync(victim.Id)).First();
+
+        var attacker = new Customer
+        {
+            Username = "avalara-idor-attacker@test.com",
+            Email = "avalara-idor-attacker@test.com",
+            Active = true
+        };
+        await _customerService.InsertCustomerAsync(attacker);
+
+        try
+        {
+            var owned = await _customerService.GetCustomerAddressAsync(attacker.Id, victimAddress.Id);
+            owned.Should().BeNull();
+
+            var pendingAddressId = await _genericAttributeService.GetAttributeAsync<int>(attacker, "AvalaraPendingValidatedAddressId");
+            pendingAddressId.Should().Be(0);
+            (victimAddress.Id > 0 && victimAddress.Id == pendingAddressId).Should().BeFalse();
+        }
+        finally
+        {
+            await _customerService.DeleteCustomerAsync(attacker);
+        }
     }
 }
