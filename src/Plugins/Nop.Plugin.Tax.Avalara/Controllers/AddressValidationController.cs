@@ -14,6 +14,7 @@ public class AddressValidationController : BaseController
 
     protected readonly IAddressService _addressService;
     protected readonly ICustomerService _customerService;
+    protected readonly IGenericAttributeService _genericAttributeService;
     protected readonly IWorkContext _workContext;
     protected readonly TaxSettings _taxSettings;
 
@@ -23,11 +24,13 @@ public class AddressValidationController : BaseController
 
     public AddressValidationController(IAddressService addressService,
         ICustomerService customerService,
+        IGenericAttributeService genericAttributeService,
         IWorkContext workContext,
         TaxSettings taxSettings)
     {
         _addressService = addressService;
         _customerService = customerService;
+        _genericAttributeService = genericAttributeService;
         _workContext = workContext;
         _taxSettings = taxSettings;
     }
@@ -39,24 +42,30 @@ public class AddressValidationController : BaseController
     [HttpPost]
     public async Task<IActionResult> UseValidatedAddress(int addressId, bool isNewAddress)
     {
-        //try to get an address by the passed identifier
+        var customer = await _workContext.GetCurrentCustomerAsync();
+        var pendingAddressId = await _genericAttributeService.GetAttributeAsync<int>(customer,
+            AvalaraTaxDefaults.PendingValidatedAddressIdAttribute);
+
+        // only the address offered on this customer's checkout confirm is assignable
+        if (addressId <= 0 || addressId != pendingAddressId)
+            return Content(string.Empty);
+
         var address = await _addressService.GetAddressByIdAsync(addressId);
         if (address != null)
         {
-            var customer = await _workContext.GetCurrentCustomerAsync();
-            //add address to customer collection if it's a new
             if (isNewAddress)
                 await _customerService.InsertCustomerAddressAsync(customer, address);
 
-            //and update appropriate customer address
             if (_taxSettings.TaxBasedOn == TaxBasedOn.BillingAddress)
-                (customer).BillingAddressId = address.Id;
+                customer.BillingAddressId = address.Id;
             if (_taxSettings.TaxBasedOn == TaxBasedOn.ShippingAddress)
-                (customer).ShippingAddressId = address.Id;
+                customer.ShippingAddressId = address.Id;
             await _customerService.UpdateCustomerAsync(customer);
         }
 
-        //nothing to return
+        await _genericAttributeService.SaveAttributeAsync<int?>(customer,
+            AvalaraTaxDefaults.PendingValidatedAddressIdAttribute, null);
+
         return Content(string.Empty);
     }
 

@@ -28,6 +28,7 @@ public class AddressValidationViewComponent : NopViewComponent
     protected readonly IAddressService _addressService;
     protected readonly ICountryService _countryService;
     protected readonly ICustomerService _customerService;
+    protected readonly IGenericAttributeService _genericAttributeService;
     protected readonly ILocalizationService _localizationService;
     protected readonly IStateProvinceService _stateProvinceService;
     protected readonly ITaxPluginManager _taxPluginManager;
@@ -43,6 +44,7 @@ public class AddressValidationViewComponent : NopViewComponent
         IAddressService addressService,
         ICountryService countryService,
         ICustomerService customerService,
+        IGenericAttributeService genericAttributeService,
         ILocalizationService localizationService,
         IStateProvinceService stateProvinceService,
         ITaxPluginManager taxPluginManager,
@@ -54,6 +56,7 @@ public class AddressValidationViewComponent : NopViewComponent
         _addressService = addressService;
         _countryService = countryService;
         _customerService = customerService;
+        _genericAttributeService = genericAttributeService;
         _localizationService = localizationService;
         _stateProvinceService = stateProvinceService;
         _taxPluginManager = taxPluginManager;
@@ -157,6 +160,9 @@ public class AddressValidationViewComponent : NopViewComponent
         }
         else
             model.AddressId = existingAddress.Id;
+
+        await _genericAttributeService.SaveAttributeAsync(customer,
+            AvalaraTaxDefaults.PendingValidatedAddressIdAttribute, model.AddressId);
 
         async Task<string> getAddressLineAsync(Address address) =>
             WebUtility.HtmlEncode($"{(!string.IsNullOrEmpty(address.Address1) ? $"{address.Address1}, " : string.Empty)}" +
