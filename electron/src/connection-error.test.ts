@@ -45,5 +45,7 @@ test("sandboxed preload only bridges retry on the connection page", () => {
   assert.match(preload, /nop-shell:retry/);
   assert.match(channel, /nop-shell:retry/);
   assert.match(preload, /connection-error\.html/);
+  assert.match(preload, /javascript:/);
+  assert.doesNotMatch(preload, /exposeInMainWorld\([\s\S]*require/);
   assert.doesNotMatch(preload, /require\(["'](?:fs|child_process|os)["']\)/);
 });

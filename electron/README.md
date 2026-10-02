@@ -94,6 +94,42 @@ The shell writes `window-state.json` under Electron's user data directory (on Li
 - **Edit** keeps undo, cut, copy, and paste so the store forms still work.
 - **View → Open DevTools** (`Cmd/Ctrl+Shift+I`) is added only when the app is not packaged. `npm run dev` and `npm run start` are unpackaged, so DevTools is available. A future packaged build omits the item.
 
+## Session
+
+The window uses the persistent partition `persist:nopcommerce`. Cookies, localStorage, and IndexedDB for the store are written under Electron's user data directory (`Partitions/nopcommerce` on Linux, inside `~/.config/nopcommerce-electron/`). The `persist:` prefix is required; a partition without it would keep the session in memory only.
+
+Chromium still drops cookies that have no expiry when the process exits. That includes a nopCommerce login with **Remember me** left unchecked, and the guest `.Nop.Customer` cookie. On quit the shell gives those session cookies a 30-day expiry and flushes them. Cookies that already have an expiry are unchanged.
+
+A second `npm run dev` focuses the existing window instead of opening another one, so the same cookie jar is reused.
+
+## Links
+
+Navigation is limited to the store origin in `NOPCOMMERCE_URL` (scheme, host, and port).
+
+- A link or redirect on that origin stays in the window. `target="_blank"` and `window.open` to that origin navigate this window instead of opening a second one.
+- Any other `http` or `https` URL opens in the system browser.
+- `file:`, `javascript:`, `data:`, `blob:`, and other non-web schemes are blocked. The shell's own connection page is the only `file:` document that may load.
+- Subframes may still load `http` and `https` (images, scripts, embedded widgets). They cannot load other schemes.
+
+`loadURL` from Retry and the menu does not go through this click filter, so a down store still shows the connection page.
+
+## `nopcommerce://` stub
+
+The shell calls `setAsDefaultProtocolClient("nopcommerce")`. From an unpackaged `electron .` process that call often does not stick; packaging is out of scope, so treat OS registration as best-effort. The handler itself is a stub, not a storefront router.
+
+If a URL is delivered on the command line or via the macOS `open-url` event, the shell navigates to that path on the **configured store origin**:
+
+| Link | Opens |
+| --- | --- |
+| `nopcommerce://cart` | `<store-origin>/cart` |
+| `nopcommerce:///catalog/shoes?color=blue` | `<store-origin>/catalog/shoes?color=blue` |
+
+```bash
+npm run dev -- nopcommerce://cart
+```
+
+The link cannot point the window at another host. Paths are rooted at the origin, so a store mounted on a subpath is not prefixed. There is no product, order, or auth-callback router.
+
 ## Security defaults
 
 The window is a remote page, not a Node app:
@@ -105,4 +141,4 @@ The window is a remote page, not a Node app:
 
 ## Not in this slice
 
-No settings window, installer, or auto-update. Change the store URL with `NOPCOMMERCE_URL` or the paired scripts above.
+No settings window, installer, or auto-update. Change the store URL with `NOPCOMMERCE_URL` or the paired scripts above. The protocol handler stays a stub until a packaged build exists.

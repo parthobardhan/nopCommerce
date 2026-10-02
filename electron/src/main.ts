@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen } from "electron";
+import { app, BrowserWindow, ipcMain, screen, session } from "electron";
 import path from "node:path";
 import { installAppMenu } from "./app-menu";
 import {
@@ -7,8 +7,13 @@ import {
   isConnectionErrorUrl,
   isUnreachableLoadError,
 } from "./connection-error";
+import { storeUrlFromDeepLink } from "./deep-link";
 import { devToolsInMenu } from "./menu-spec";
+import { attachNavigationGuards } from "./navigation-guard";
+import { findDeepLink, protocolClientInvocation } from "./protocol-stub";
 import { RETRY_CHANNEL } from "./retry-channel";
+import { persistSessionCookies } from "./session-cookies";
+import { STORE_PARTITION } from "./session-partition";
 import { getStoreUrl } from "./store-url";
 import {
   readWindowState,
@@ -22,6 +27,7 @@ const DEFAULT_WIDTH = 1280;
 const DEFAULT_HEIGHT = 800;
 
 let storeUrl = "";
+let pendingDeepLink = findDeepLink(process.argv);
 const attemptedUrl = new WeakMap<BrowserWindow, string>();
 
 function currentWindow(): BrowserWindow | undefined {
@@ -125,6 +131,7 @@ function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      partition: STORE_PARTITION,
       preload: path.join(__dirname, "..", "static", "preload.js"),
     },
   });
@@ -134,6 +141,11 @@ function createMainWindow(): BrowserWindow {
   }
 
   rememberWindowState(window, statePath);
+  attachNavigationGuards(window, {
+    getStoreUrl: () => storeUrl,
+    connectionFile: connectionErrorFile(path.join(__dirname, "..")),
+    openInWindow: (url) => loadStore(window, url),
+  });
 
   window.webContents.on(
     "did-fail-load",
@@ -149,8 +161,58 @@ function createMainWindow(): BrowserWindow {
     },
   );
 
-  loadStore(window, storeUrl);
+  loadStore(window, takeStartupUrl());
   return window;
+}
+
+function takeStartupUrl(): string {
+  const link = pendingDeepLink;
+  pendingDeepLink = undefined;
+  if (!link) {
+    return storeUrl;
+  }
+  const target = storeUrlFromDeepLink(link, storeUrl);
+  if (!target) {
+    console.log(`Ignored deep link ${link}`);
+    return storeUrl;
+  }
+  console.log(`Deep link stub → ${target}`);
+  return target;
+}
+
+function focusDeepLink(link: string): void {
+  const window = currentWindow();
+  if (!window || !storeUrl) {
+    pendingDeepLink = link;
+    return;
+  }
+  const target = storeUrlFromDeepLink(link, storeUrl);
+  if (!target) {
+    console.log(`Ignored deep link ${link}`);
+  } else {
+    console.log(`Deep link stub → ${target}`);
+    loadStore(window, target);
+  }
+  if (window.isMinimized()) {
+    window.restore();
+  }
+  window.focus();
+}
+
+function registerProtocolStub(): void {
+  const invocation = protocolClientInvocation({
+    isDefaultApp: Boolean(process.defaultApp),
+    execPath: process.execPath,
+    argv: process.argv,
+  });
+  const registered = invocation.execPath
+    ? app.setAsDefaultProtocolClient(invocation.protocol, invocation.execPath, invocation.args)
+    : app.setAsDefaultProtocolClient(invocation.protocol);
+  console.log(
+    registered
+      ? `Registered ${invocation.protocol}:// stub`
+      : `${invocation.protocol}:// handler is a stub; OS registration was not accepted for this unpackaged process`,
+  );
 }
 
 function bootstrap(): void {
@@ -196,10 +258,55 @@ function bootstrap(): void {
   });
 }
 
-app.whenReady().then(bootstrap);
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
+let quitting = false;
+app.on("before-quit", (event) => {
+  if (quitting) {
+    return;
   }
+  event.preventDefault();
+  quitting = true;
+  persistSessionCookies(session.fromPartition(STORE_PARTITION))
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Could not persist session cookies: ${message}`);
+    })
+    .finally(() => {
+      app.quit();
+    });
 });
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  registerProtocolStub();
+
+  app.on("second-instance", (_event, argv) => {
+    const link = findDeepLink(argv);
+    if (link) {
+      focusDeepLink(link);
+      return;
+    }
+    const window = currentWindow();
+    if (!window) {
+      return;
+    }
+    if (window.isMinimized()) {
+      window.restore();
+    }
+    window.focus();
+  });
+
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    focusDeepLink(url);
+  });
+
+  app.whenReady().then(bootstrap);
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+}
