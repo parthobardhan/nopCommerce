@@ -109,8 +109,8 @@ public class AvalaraPublicController : BasePublicController
                 return RedirectToRoute(NopRouteNames.General.CUSTOMER_INFO);
         }
 
-        //try to get a file by the identifier
-        var file = await _avalaraTaxManager.DownloadCertificateAsync(id);
+        //try to get a file by the identifier (only certificates linked to this customer)
+        var file = await _avalaraTaxManager.DownloadCertificateAsync(customer, id);
         if (file is null)
             return InvokeHttp404();
 
