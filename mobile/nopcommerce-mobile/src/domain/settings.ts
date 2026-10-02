@@ -19,7 +19,8 @@ export type UrlValidation = { ok: true; url: string } | { ok: false; reason: str
 export function normalizeStoreUrl(input: string): UrlValidation {
   const trimmed = input.trim();
   if (!trimmed) return { ok: false, reason: 'Enter the store URL' };
-  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed);
+  const withScheme = hasScheme ? trimmed : `https://${trimmed}`;
   let parsed: URL;
   try {
     parsed = new URL(withScheme);

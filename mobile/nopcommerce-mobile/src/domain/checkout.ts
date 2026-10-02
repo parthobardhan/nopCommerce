@@ -52,8 +52,16 @@ export function validateAddress(address: AddressModelDto): AddressErrors {
   if (!text(address.address1)) errors.address1 = 'Street address is required';
   if (!text(address.zip_postal_code)) errors.zip_postal_code = 'Postal code is required';
   if (!text(address.phone_number)) errors.phone_number = 'Phone number is required';
-  else if (!/^[+\d][\d\s().-]{5,}$/.test(address.phone_number!.trim())) errors.phone_number = 'Enter a valid phone number';
+  else if (!isPlausiblePhone(address.phone_number!)) errors.phone_number = 'Enter a valid phone number';
   return errors;
+}
+
+/** Accepts international formats with separators; requires 6–15 digits (E.164 upper bound). */
+export function isPlausiblePhone(value: string): boolean {
+  const trimmed = value.trim();
+  if (!/^\+?[\d\s().-]+$/.test(trimmed)) return false;
+  const digits = trimmed.replace(/\D/g, '').length;
+  return digits >= 6 && digits <= 15;
 }
 
 export function isAddressValid(address: AddressModelDto): boolean {

@@ -94,7 +94,7 @@ export class DemoStoreApi implements StoreApi {
     return token;
   }
 
-  async login(username: string, password: string): Promise<TokenResponse> {
+  async login(username: string, password: string, _rememberMe: boolean): Promise<TokenResponse> {
     await this.delay();
     const email = username.trim().toLowerCase();
     const match = this.state.registered.find((c) => c.email.toLowerCase() === email && c.password === password);
@@ -268,7 +268,7 @@ export class DemoStoreApi implements StoreApi {
     };
   }
 
-  async saveBillingAddress(address: AddressModelDto): Promise<CheckoutRedirectResponse> {
+  async saveBillingAddress(address: AddressModelDto, _shipToSameAddress: boolean): Promise<CheckoutRedirectResponse> {
     await this.delay();
     this.requireCart();
     if (!isAddressValid(address)) return { wrong_billing_address: true, errors: ['Please fill in all required address fields'] };
