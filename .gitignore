@@ -213,3 +213,4 @@ src/Tests/Nop.Tests/Connections.resx
 ###########
 electron/node_modules/
 electron/dist/
+electron/release/

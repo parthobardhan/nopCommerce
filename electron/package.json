@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Electron shell that loads a nopCommerce storefront",
+  "author": "nopCommerce contributors",
   "main": "dist/main.js",
   "scripts": {
     "dev": "npm run build && electron .",
@@ -10,11 +11,16 @@
     "dev:dotnet": "npm run build && node scripts/dev-paired.js dotnet",
     "build": "tsc -p tsconfig.json",
     "start": "electron .",
-    "test": "npm run build && node --test dist/*.test.js"
+    "test": "npm run build && node --test dist/*.test.js",
+    "pack:dir": "npm run build && electron-builder --dir --config electron-builder.yml",
+    "pack:linux": "npm run build && electron-builder --linux --config electron-builder.yml",
+    "pack:win": "npm run build && electron-builder --win --config electron-builder.yml",
+    "pack:mac": "npm run build && electron-builder --mac --config electron-builder.yml"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
     "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.8.3"
   }
 }

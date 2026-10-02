@@ -1,0 +1,34 @@
+# Unsigned by default. Signing uses the environment variables in signing.env.example.
+# Do not put certificates, passwords, or Apple secrets in this file.
+appId: com.nopcommerce.desktop
+productName: nopCommerce
+copyright: Copyright © nopCommerce contributors
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - static/**
+  - package.json
+asar: true
+forceCodeSigning: false
+linux:
+  target:
+    - deb
+    - AppImage
+  category: Office
+  synopsis: Desktop shell for a nopCommerce storefront
+win:
+  target:
+    - nsis
+  signtoolOptions:
+    signingHashAlgorithms:
+      - sha256
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.business
+  # null skips the Developer ID identity lookup. Set CSC_LINK to sign.
+  identity: null
+publish: null

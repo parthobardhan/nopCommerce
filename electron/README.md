@@ -145,7 +145,7 @@ Navigation is limited to the store origin this process is using (scheme, host, a
 
 ## `nopcommerce://` stub
 
-The shell calls `setAsDefaultProtocolClient("nopcommerce")`. From an unpackaged `electron .` process that call often does not stick; packaging is out of scope, so treat OS registration as best-effort. The handler itself is a stub, not a storefront router.
+The shell calls `setAsDefaultProtocolClient("nopcommerce")`. An unpackaged `electron .` process often is not accepted as the OS handler. A packaged install can register the executable; the handler is still only the path stub described below, not a storefront router.
 
 If a URL is delivered on the command line or via the macOS `open-url` event, the shell navigates to that path on the **configured store origin**:
 
@@ -169,6 +169,25 @@ The window is a remote page, not a Node app:
 - `sandbox: true`
 - The preload script exposes `retry` only on the local connection page. The storefront does not get Node, `ipcRenderer`, or that function.
 
+## Package
+
+Unsigned local builds. Installers land in `electron/release/`, which is gitignored.
+
+```bash
+cd electron
+npm install
+npm run pack:dir      # unpacked app for this OS, fastest check
+npm run pack:linux    # .deb and AppImage (run on Linux)
+npm run pack:win      # NSIS installer (run on Windows)
+npm run pack:mac      # dmg and zip (run on macOS)
+```
+
+`electron-builder.yml` lists all three operating systems. A Linux machine can build the Linux packages. Windows and macOS installers need those operating systems; electron-builder will not cross-build a signed macOS app from Linux.
+
+Signing is optional. Names live in `signing.env.example`. Leave them empty, and set `CSC_IDENTITY_AUTO_DISCOVERY=false`, for an unsigned build. Do not commit a certificate or a password.
+
+GitHub Actions (`.github/workflows/electron.yml`) runs `npm test` and `npm run pack:linux` on pull requests that change `electron/`, and on tags named `electron-v*`. The Linux package is uploaded as the artifact `nopcommerce-electron-linux`. The workflow forces `CSC_IDENTITY_AUTO_DISCOVERY=false`, so it does not sign. Windows and macOS artifacts are produced with the local commands above.
+
 ## Not in this slice
 
-No installer or auto-update. The protocol handler stays a stub until a packaged build exists.
+No auto-update. The `nopcommerce://` handler remains a path stub.
