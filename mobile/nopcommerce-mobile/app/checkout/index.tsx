@@ -36,7 +36,7 @@ export default function CheckoutScreen() {
   const [address, setAddress] = useState<AddressModelDto | null>(null);
   const [shipToSame, setShipToSame] = useState(true);
   const [shippingOption, setShippingOption] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<{ systemName: string; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (cart.isPending) return <Loading />;
@@ -67,13 +67,13 @@ export default function CheckoutScreen() {
           <ShippingStep selected={shippingOption} onSelect={setShippingOption} onError={setError} onBack={() => go(previousStep('shipping', requiresShipping))} onDone={() => go('payment')} />
         ) : null}
         {step === 'payment' ? (
-          <PaymentStep selected={paymentMethod} onSelect={setPaymentMethod} onError={setError} onBack={() => go(previousStep('payment', requiresShipping))} onDone={() => go('confirm')} />
+          <PaymentStep selected={paymentMethod?.systemName ?? null} onSelect={setPaymentMethod} onError={setError} onBack={() => go(previousStep('payment', requiresShipping))} onDone={() => go('confirm')} />
         ) : null}
         {step === 'confirm' ? (
           <ConfirmStep
             address={address ?? emptyAddress()}
             shippingOption={shippingOption}
-            paymentMethod={paymentMethod}
+            paymentMethodName={paymentMethod?.name ?? null}
             totals={{ subtotal: totals.data?.sub_total ?? null, shipping: totals.data?.shipping ?? null, tax: totals.data?.tax ?? null, total: totals.data?.order_total ?? null }}
             items={cart.data.items.map((i) => ({ id: i.id, name: i.product_name, quantity: i.quantity, subTotal: i.sub_total }))}
             onBack={() => go('payment')}
@@ -251,7 +251,11 @@ function ShippingStep({ selected, onSelect, onError, onBack, onDone }: ChoiceSte
   );
 }
 
-function PaymentStep({ selected, onSelect, onError, onBack, onDone }: ChoiceStepProps) {
+interface PaymentStepProps extends Omit<ChoiceStepProps, 'onSelect'> {
+  onSelect: (method: { systemName: string; name: string }) => void;
+}
+
+function PaymentStep({ selected, onSelect, onError, onBack, onDone }: PaymentStepProps) {
   const methods = usePaymentMethods(true);
   const save = useSavePayment();
 
@@ -262,9 +266,10 @@ function PaymentStep({ selected, onSelect, onError, onBack, onDone }: ChoiceStep
   const current = selected ?? preselected?.payment_method_system_name ?? null;
 
   const submit = () => {
-    if (!current) return onError('Choose a payment method');
-    onSelect(current);
-    save.mutate(current, {
+    const chosen = methods.data.payment_methods.find((m) => m.payment_method_system_name === current);
+    if (!chosen) return onError('Choose a payment method');
+    onSelect({ systemName: chosen.payment_method_system_name, name: chosen.name });
+    save.mutate(chosen.payment_method_system_name, {
       onSuccess: (result) => (result.errors?.length ? onError(result.errors.join('\n')) : onDone()),
       onError: (e) => onError(describeError(e)),
     });
@@ -278,7 +283,7 @@ function PaymentStep({ selected, onSelect, onError, onBack, onDone }: ChoiceStep
       {methods.data.payment_methods.map((m) => {
         const isSelected = current === m.payment_method_system_name;
         return (
-          <Pressable key={m.payment_method_system_name} onPress={() => onSelect(m.payment_method_system_name)} style={[styles.option, isSelected && styles.optionSelected]} accessibilityRole="radio" accessibilityState={{ selected: isSelected }} testID={`payment-${m.payment_method_system_name}`}>
+          <Pressable key={m.payment_method_system_name} onPress={() => onSelect({ systemName: m.payment_method_system_name, name: m.name })} style={[styles.option, isSelected && styles.optionSelected]} accessibilityRole="radio" accessibilityState={{ selected: isSelected }} testID={`payment-${m.payment_method_system_name}`}>
             <View style={{ flex: 1 }}>
               <Text style={styles.optionTitle}>{m.name}</Text>
               {m.description ? <Text style={typography.caption}>{m.description}</Text> : null}
@@ -298,14 +303,14 @@ function PaymentStep({ selected, onSelect, onError, onBack, onDone }: ChoiceStep
 interface ConfirmStepProps {
   address: AddressModelDto;
   shippingOption: string | null;
-  paymentMethod: string | null;
+  paymentMethodName: string | null;
   totals: { subtotal: string | null; shipping: string | null; tax: string | null; total: string | null };
   items: { id: number; name: string; quantity: number; subTotal: string }[];
   onBack: () => void;
   onError: (message: string | null) => void;
 }
 
-function ConfirmStep({ address, shippingOption, paymentMethod, totals, items, onBack, onError }: ConfirmStepProps) {
+function ConfirmStep({ address, shippingOption, paymentMethodName, totals, items, onBack, onError }: ConfirmStepProps) {
   const confirm = useConfirmOrder();
   const place = () => {
     confirm.mutate(undefined, {
@@ -329,7 +334,7 @@ function ConfirmStep({ address, shippingOption, paymentMethod, totals, items, on
       <Text style={styles.summaryLabel}>Shipping</Text>
       <Text style={typography.body}>{shippingOption?.split('___')[0] ?? '—'}</Text>
       <Text style={styles.summaryLabel}>Payment</Text>
-      <Text style={typography.body}>{paymentMethod ?? '—'}</Text>
+      <Text style={typography.body}>{paymentMethodName ?? '—'}</Text>
       <Text style={styles.summaryLabel}>Items</Text>
       {items.map((i) => (
         <View key={i.id} style={styles.row}>
