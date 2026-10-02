@@ -110,6 +110,49 @@ public class CustomerRegistrationServiceTests : ServiceTest
     }
 
     [Test]
+    public async Task CanValidateCustomerByPhone()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear);
+        customer.Phone = "+15550001001";
+        customer.PhoneSmsVerified = true;
+        await _customerService.UpdateCustomerAsync(customer);
+
+        var result = await _customerRegistrationService.ValidateCustomerByPhoneAsync(customer.Phone);
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.Successful);
+    }
+
+    [Test]
+    public async Task EnsureLockedOutCustomersCannotLoginByPhone()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear);
+        customer.Phone = "+15550001002";
+        customer.PhoneSmsVerified = true;
+        customer.CannotLoginUntilDateUtc = DateTime.UtcNow.AddMinutes(10);
+        await _customerService.UpdateCustomerAsync(customer);
+
+        var result = await _customerRegistrationService.ValidateCustomerByPhoneAsync(customer.Phone);
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.LockedOut);
+    }
+
+    [Test]
+    public async Task EnsureOnlyRegisteredCustomersCanLoginByPhone()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear, false);
+        customer.Phone = "+15550001003";
+        customer.PhoneSmsVerified = true;
+        await _customerService.UpdateCustomerAsync(customer);
+
+        var result = await _customerRegistrationService.ValidateCustomerByPhoneAsync(customer.Phone);
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.NotRegistered);
+    }
+
+    [Test]
     public async Task CanChangePassword()
     {
         var customer = await CreateCustomerAsync(PasswordFormat.Encrypted);
