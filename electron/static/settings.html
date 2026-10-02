@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <title>Settings</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f4f5f7;
+        color: #1c1e21;
+        font: 15px/1.45 "Segoe UI", sans-serif;
+      }
+      main {
+        padding: 20px 22px 24px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 20px;
+      }
+      label {
+        display: block;
+        margin: 12px 0 4px;
+        font-weight: 600;
+      }
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #c5cad3;
+        border-radius: 8px;
+        font: inherit;
+      }
+      .note {
+        margin: 8px 0 0;
+        color: #5c6570;
+        font-size: 13px;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .status {
+        min-height: 1.3em;
+        margin: 12px 0 0;
+        font-size: 13px;
+      }
+      .status.error {
+        color: #9b2c2c;
+      }
+      button {
+        margin-top: 14px;
+        background: #1f6feb;
+        color: #fff;
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font: inherit;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Settings</h1>
+      <p id="override" class="note" hidden></p>
+      <label for="environment">Environment label</label>
+      <input id="environment" type="text" maxlength="40" autocomplete="off" />
+      <label for="store-url">Store URL</label>
+      <input id="store-url" type="url" spellcheck="false" autocomplete="off" />
+      <p class="note">
+        Saved here and used on the next launch. <span class="mono">NOPCOMMERCE_URL</span>, including
+        <span class="mono">dev:docker</span> and <span class="mono">dev:dotnet</span>, overrides the
+        URL for that process only.
+      </p>
+      <button id="save" type="button">Save</button>
+      <p id="status" class="status" role="status"></p>
+    </main>
+    <script>
+      const environment = document.getElementById("environment");
+      const storeUrl = document.getElementById("store-url");
+      const override = document.getElementById("override");
+      const status = document.getElementById("status");
+
+      function setStatus(message, isError) {
+        status.textContent = message;
+        status.className = isError ? "status error" : "status";
+      }
+
+      document.getElementById("save").addEventListener("click", async () => {
+        const shell = window.nopSettings;
+        if (!shell || typeof shell.save !== "function") {
+          setStatus("Settings bridge is missing.", true);
+          return;
+        }
+        const result = await shell.save({
+          storeUrl: storeUrl.value,
+          environmentLabel: environment.value,
+        });
+        setStatus(result.message || "", !result.ok);
+        if (result.ok && result.settings) {
+          storeUrl.value = result.settings.storeUrl;
+          environment.value = result.settings.environmentLabel;
+        }
+      });
+
+      const shell = window.nopSettings;
+      if (shell && typeof shell.get === "function") {
+        shell.get().then((view) => {
+          environment.value = view.environmentLabel;
+          storeUrl.value = view.storedUrl;
+          if (view.urlOverriddenByEnv) {
+            override.hidden = false;
+            override.textContent =
+              "This launch is using " + view.effectiveUrl + " from NOPCOMMERCE_URL. Saving does not switch it.";
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

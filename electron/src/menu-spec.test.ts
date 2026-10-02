@@ -8,8 +8,11 @@ test("packaged builds omit DevTools", () => {
   assert.equal(visibleMenuLabels(false).includes("Open DevTools"), false);
 });
 
-test("dev menu exposes Reload, Quit, and DevTools", () => {
+test("dev menu exposes Reload, Quit, DevTools, and store shortcuts", () => {
   const labels = visibleMenuLabels(true);
+  assert.ok(labels.includes("Open Storefront"));
+  assert.ok(labels.includes("Open Admin"));
+  assert.ok(labels.includes("Settings…"));
   assert.ok(labels.includes("Reload"));
   assert.ok(labels.includes("Quit"));
   assert.ok(labels.includes("Open DevTools"));

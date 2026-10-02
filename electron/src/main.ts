@@ -14,7 +14,20 @@ import { findDeepLink, protocolClientInvocation } from "./protocol-stub";
 import { RETRY_CHANNEL } from "./retry-channel";
 import { persistSessionCookies } from "./session-cookies";
 import { STORE_PARTITION } from "./session-partition";
-import { getStoreUrl } from "./store-url";
+import {
+  ADMIN_PATH,
+  STOREFRONT_PATH,
+  defaultShellSettings,
+  formatWindowTitle,
+  readSettings,
+  resolveLaunchSettings,
+  settingsFile,
+  settingsFromInput,
+  urlForStorePath,
+  writeSettings,
+  type ShellSettings,
+} from "./settings";
+import { openSettingsWindow, registerSettingsIpc } from "./settings-window";
 import {
   readWindowState,
   resolveInitialBounds,
@@ -27,11 +40,22 @@ const DEFAULT_WIDTH = 1280;
 const DEFAULT_HEIGHT = 800;
 
 let storeUrl = "";
+let environmentLabel = defaultShellSettings().environmentLabel;
+let urlOverriddenByEnv = false;
+let storedSettings: ShellSettings = defaultShellSettings();
 let pendingDeepLink = findDeepLink(process.argv);
+let storeWindow: BrowserWindow | undefined;
 const attemptedUrl = new WeakMap<BrowserWindow, string>();
 
-function currentWindow(): BrowserWindow | undefined {
-  return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+function storefrontWindow(): BrowserWindow | undefined {
+  if (storeWindow && !storeWindow.isDestroyed()) {
+    return storeWindow;
+  }
+  return undefined;
+}
+
+function applyEnvironmentTitle(window: BrowserWindow, pageTitle: string): void {
+  window.setTitle(formatWindowTitle(environmentLabel, pageTitle));
 }
 
 function loadStore(window: BrowserWindow, url: string): void {
@@ -54,6 +78,15 @@ function retryStore(window: BrowserWindow): void {
     return;
   }
   loadStore(window, attemptedUrl.get(window) ?? storeUrl);
+}
+
+function openStorePath(storePath: string): void {
+  const window = storefrontWindow();
+  if (!window) {
+    return;
+  }
+  loadStore(window, urlForStorePath(storeUrl, storePath));
+  window.focus();
 }
 
 function reloadWindow(window: BrowserWindow): void {
@@ -123,10 +156,10 @@ function createMainWindow(): BrowserWindow {
   );
 
   const window = new BrowserWindow({
+    title: environmentLabel,
     ...(initial.x !== undefined && initial.y !== undefined ? { x: initial.x, y: initial.y } : {}),
     width: initial.width,
     height: initial.height,
-    title: "nopCommerce",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -139,6 +172,17 @@ function createMainWindow(): BrowserWindow {
   if (initial.isMaximized) {
     window.maximize();
   }
+
+  storeWindow = window;
+  window.on("closed", () => {
+    if (storeWindow === window) {
+      storeWindow = undefined;
+    }
+  });
+  window.on("page-title-updated", (event, title) => {
+    event.preventDefault();
+    applyEnvironmentTitle(window, title);
+  });
 
   rememberWindowState(window, statePath);
   attachNavigationGuards(window, {
@@ -181,9 +225,12 @@ function takeStartupUrl(): string {
 }
 
 function focusDeepLink(link: string): void {
-  const window = currentWindow();
+  const window = storefrontWindow();
   if (!window || !storeUrl) {
     pendingDeepLink = link;
+    if (!window && storeUrl) {
+      createMainWindow();
+    }
     return;
   }
   const target = storeUrlFromDeepLink(link, storeUrl);
@@ -217,7 +264,11 @@ function registerProtocolStub(): void {
 
 function bootstrap(): void {
   try {
-    storeUrl = getStoreUrl();
+    const launch = resolveLaunchSettings(readSettings(settingsFile(app.getPath("userData"))), process.env);
+    storedSettings = launch.stored;
+    storeUrl = launch.effectiveUrl;
+    environmentLabel = launch.stored.environmentLabel;
+    urlOverriddenByEnv = launch.urlOverriddenByEnv;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);
@@ -229,24 +280,68 @@ function bootstrap(): void {
 
   installAppMenu(
     {
+      storefront: () => openStorePath(STOREFRONT_PATH),
+      admin: () => openStorePath(ADMIN_PATH),
+      settings: () => openSettingsWindow(storefrontWindow()),
       reload: () => {
-        const window = currentWindow();
+        const window = storefrontWindow();
         if (window) {
           reloadWindow(window);
         }
       },
       devtools: () => {
-        currentWindow()?.webContents.openDevTools({ mode: "detach" });
+        const window = BrowserWindow.getFocusedWindow() ?? storefrontWindow();
+        window?.webContents.openDevTools({ mode: "detach" });
       },
     },
     devToolsInMenu(app.isPackaged),
   );
 
+  registerSettingsIpc({
+    getView: () => ({
+      storedUrl: storedSettings.storeUrl,
+      environmentLabel,
+      effectiveUrl: storeUrl,
+      urlOverriddenByEnv,
+    }),
+    save: (input) => {
+      const parsed = settingsFromInput(input);
+      if (!parsed.ok) {
+        return parsed;
+      }
+      storedSettings = parsed.settings;
+      environmentLabel = parsed.settings.environmentLabel;
+      try {
+        writeSettings(settingsFile(app.getPath("userData")), storedSettings);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { ok: false, message };
+      }
+      const window = storefrontWindow();
+      if (window) {
+        applyEnvironmentTitle(window, window.webContents.getTitle());
+      }
+      if (!urlOverriddenByEnv) {
+        storeUrl = storedSettings.storeUrl;
+        if (window) {
+          loadStore(window, storeUrl);
+        }
+        return { ok: true, message: "Saved. Opening the store.", settings: storedSettings };
+      }
+      return {
+        ok: true,
+        message: "Saved for the next launch. This process is still using NOPCOMMERCE_URL.",
+        settings: storedSettings,
+      };
+    },
+  });
+
   ipcMain.on(RETRY_CHANNEL, (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
-    if (window) {
-      retryStore(window);
+    if (!window || window !== storefrontWindow()) {
+      return;
     }
+    retryStore(window);
   });
 
   createMainWindow();
@@ -287,7 +382,7 @@ if (!gotSingleInstanceLock) {
       focusDeepLink(link);
       return;
     }
-    const window = currentWindow();
+    const window = storefrontWindow();
     if (!window) {
       return;
     }

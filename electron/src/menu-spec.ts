@@ -1,4 +1,4 @@
-export type MenuAction = "reload" | "devtools";
+export type MenuAction = "reload" | "devtools" | "storefront" | "admin" | "settings";
 
 export type MenuRole = "undo" | "redo" | "cut" | "copy" | "paste" | "selectAll" | "quit";
 
@@ -21,6 +21,10 @@ export function menuSections(devTools: boolean): MenuSection[] {
     {
       label: "File",
       entries: [
+        { type: "action", label: "Open Storefront", action: "storefront" },
+        { type: "action", label: "Open Admin", action: "admin" },
+        { type: "action", label: "Settings…", action: "settings", accelerator: "CmdOrCtrl+," },
+        { type: "separator" },
         { type: "action", label: "Reload", action: "reload", accelerator: "CmdOrCtrl+R" },
         { type: "action", label: "Reload", action: "reload", accelerator: "F5", visible: false },
         { type: "separator" },

@@ -46,6 +46,13 @@ test("sandboxed preload only bridges retry on the connection page", () => {
   assert.match(channel, /nop-shell:retry/);
   assert.match(preload, /connection-error\.html/);
   assert.match(preload, /javascript:/);
+  const settingsPreload = fs.readFileSync(path.join(root, "static", "settings-preload.js"), "utf8");
+  const settingsChannel = fs.readFileSync(path.join(root, "src", "settings-channel.ts"), "utf8");
+  assert.match(settingsPreload, /settings:get/);
+  assert.match(settingsPreload, /settings:save/);
+  assert.match(settingsChannel, /settings:get/);
+  assert.match(settingsChannel, /settings:save/);
+  assert.match(settingsPreload, /settings\.html/);
   assert.doesNotMatch(preload, /exposeInMainWorld\([\s\S]*require/);
   assert.doesNotMatch(preload, /require\(["'](?:fs|child_process|os)["']\)/);
 });

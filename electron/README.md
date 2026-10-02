@@ -89,10 +89,32 @@ The shell writes `window-state.json` under Electron's user data directory (on Li
 
 ## Menu
 
+- **File → Open Storefront** loads the store origin root (`/`).
+- **File → Open Admin** loads `/admin`. nopCommerce registers areas as `{area}/Home/Index` and the admin area name is `Admin` (`AreaNames.ADMIN`). The installer robots list also disallows `/admin`. An anonymous session is redirected by the store to `/login?returnUrl=%2Fadmin`.
+- **File → Settings…** (`Cmd/Ctrl+,`) edits the environment label and store URL.
 - **File → Reload** reloads the store page, or retries from the connection page.
 - **File → Quit** (`Cmd/Ctrl+Q`).
 - **Edit** keeps undo, cut, copy, and paste so the store forms still work.
 - **View → Open DevTools** (`Cmd/Ctrl+Shift+I`) is added only when the app is not packaged. `npm run dev` and `npm run start` are unpackaged, so DevTools is available. A future packaged build omits the item.
+
+## Settings
+
+File → Settings… stores two fields in `settings.json` under Electron's user data directory (on Linux, `~/.config/nopcommerce-electron/settings.json`):
+
+| Field | Default | Effect |
+| --- | --- | --- |
+| Environment label | `Local` | Prefixes the window title (`Local — Your store`). Not read from the environment. |
+| Store URL | `http://localhost` | Page the shell opens when `NOPCOMMERCE_URL` is unset. |
+
+Precedence for the URL this process loads:
+
+1. `NOPCOMMERCE_URL`, when it is set. `npm run dev:docker` sets `http://localhost`. `npm run dev:dotnet` sets `http://localhost:5000`. The variable does not rewrite `settings.json`.
+2. The store URL saved in Settings.
+3. `http://localhost`.
+
+Saving while `NOPCOMMERCE_URL` is set writes the file for the next launch and leaves this process on the env URL. Saving without that variable opens the new URL immediately. A blank label is stored as `Local`.
+
+The settings window is a local page with its own preload. That preload exposes `get` and `save` only. The storefront preload still does not expose Node.
 
 ## Session
 
@@ -104,7 +126,7 @@ A second `npm run dev` focuses the existing window instead of opening another on
 
 ## Links
 
-Navigation is limited to the store origin in `NOPCOMMERCE_URL` (scheme, host, and port).
+Navigation is limited to the store origin this process is using (scheme, host, and port).
 
 - A link or redirect on that origin stays in the window. `target="_blank"` and `window.open` to that origin navigate this window instead of opening a second one.
 - Any other `http` or `https` URL opens in the system browser.
@@ -141,4 +163,4 @@ The window is a remote page, not a Node app:
 
 ## Not in this slice
 
-No settings window, installer, or auto-update. Change the store URL with `NOPCOMMERCE_URL` or the paired scripts above. The protocol handler stays a stub until a packaged build exists.
+No installer or auto-update. The protocol handler stays a stub until a packaged build exists.
