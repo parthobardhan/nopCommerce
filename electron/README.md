@@ -1,0 +1,243 @@
+# nopCommerce Electron shell
+
+Desktop window that loads a nopCommerce storefront. The ASP.NET app stays where it is; this package only embeds it.
+
+## Prerequisites
+
+- Node.js 22+
+- A running nopCommerce site (Docker or `dotnet run`)
+
+```bash
+cd electron
+npm install
+```
+
+## Pair with Docker Compose
+
+From the repo root. The image listens on port 80 (`ASPNETCORE_URLS=http://+:80` in the `Dockerfile`). Each compose file publishes that port on the host (`"80:80"`):
+
+```bash
+docker compose up --build
+```
+
+MySQL or PostgreSQL instead of SQL Server:
+
+```bash
+docker compose -f mysql-docker-compose.yml up --build
+docker compose -f postgresql-docker-compose.yml up --build
+```
+
+The storefront is [http://localhost](http://localhost). In another terminal:
+
+```bash
+cd electron
+npm run dev:docker
+```
+
+`dev:docker` always sets `NOPCOMMERCE_URL=http://localhost` for that process.
+
+## Pair with dotnet run
+
+`Properties/launchSettings.json` is gitignored, so a checkout does not pin a port. Without that file and without `ASPNETCORE_URLS`, Kestrel listens on [http://localhost:5000](http://localhost:5000).
+
+From the repo root:
+
+```bash
+dotnet run --project src/Presentation/Nop.Web/Nop.Web.csproj
+```
+
+In another terminal:
+
+```bash
+cd electron
+npm run dev:dotnet
+```
+
+`dev:dotnet` always sets `NOPCOMMERCE_URL=http://localhost:5000`. If a local `launchSettings.json` uses another port, skip the paired script and set the variable yourself:
+
+```bash
+NOPCOMMERCE_URL=https://localhost:5001 npm run dev
+```
+
+The same variable works for a deployed store:
+
+```bash
+NOPCOMMERCE_URL=https://your-store.example.com npm run dev
+```
+
+You can start the shell before the site is up. The window shows a connection page until the store answers.
+
+## Scripts
+
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Compile, then open the shell. Uses `NOPCOMMERCE_URL` or `http://localhost`. |
+| `npm run dev:docker` | Compile, then open the shell at the Docker URL (`http://localhost`). |
+| `npm run dev:dotnet` | Compile, then open the shell at the `dotnet run` URL (`http://localhost:5000`). |
+| `npm run build` | Compile `src/` to `dist/`. |
+| `npm run start` | Open the shell from the last build. Honors `NOPCOMMERCE_URL`. |
+
+## Connection page
+
+If the store URL never loads (connection refused, DNS failure, timeout, or the machine is offline), the window shows **Can't reach the store** with the URL and the Chromium error. **Retry** loads that URL again. Nothing is written to the page as HTML; the URL is set as text.
+
+File → Reload does the same thing while that page is showing. On a store page, Reload refreshes the current page (`Cmd/Ctrl+R` or `F5`).
+
+## Window size and position
+
+The shell writes `window-state.json` under Electron's user data directory (on Linux, `~/.config/nopcommerce-electron/`). The next launch restores size, position, and maximized state. If those bounds no longer intersect a display, the window opens at 1280×800 instead of off-screen.
+
+## Menu
+
+- **File → Open Storefront** loads the store origin root (`/`).
+- **File → Open Admin** loads `/admin`. nopCommerce registers areas as `{area}/Home/Index` and the admin area name is `Admin` (`AreaNames.ADMIN`). The installer robots list also disallows `/admin`. An anonymous session is redirected by the store to `/login?returnUrl=%2Fadmin`.
+- **File → Settings…** (`Cmd/Ctrl+,`) edits the environment label and store URL.
+- **File → Reload** reloads the store page, or retries from the connection page.
+- **File → Quit** (`Cmd/Ctrl+Q`).
+- **Edit** keeps undo, cut, copy, and paste so the store forms still work.
+- **View → Open DevTools** (`Cmd/Ctrl+Shift+I`) is added only when the app is not packaged. `npm run dev` and `npm run start` are unpackaged, so DevTools is available. A future packaged build omits the item.
+- **Help → About nopCommerce** shows the shell version from `package.json` (`0.1.0` today).
+- **Help → Show notification** posts one fixed Electron notification. It is a stub: there is no order or store event behind it. If notifications are unsupported, or Linux has no real session bus (`DBUS_SESSION_BUS_ADDRESS` is missing or `disabled:`), the same text opens in a dialog instead. `libnotify` cannot deliver to `disabled:`.
+
+## Tray
+
+A tray icon is created when the shell starts. The log line `Tray icon created` means the icon object exists. It only shows up in a desktop panel that implements StatusNotifier or AppIndicator. A session without that panel (this VM's dbus bus is one example) still runs the shell; use the Help menu for About and the notification stub. **Show window** and a tray click bring the store forward. **Hide window** hides it without quitting. **Quit** exits.
+
+Closing the window with the title-bar button still quits, same as File → Quit. Minimize stays on the taskbar unless Settings → **Hide to the tray when minimized** is checked. That option is off by default and is stored in `settings.json`. With it on, minimizing hides the window and leaves the tray icon. Tray → **Hide window** does the same without the setting. Click the icon, or choose **Show window**, to bring it back. On Wayland the minimize button may not emit a minimize event, so use Hide window from the tray. Linux often opens the tray menu on click instead of the window; Show window is the first item.
+
+## Settings
+
+File → Settings… stores two fields in `settings.json` under Electron's user data directory (on Linux, `~/.config/nopcommerce-electron/settings.json`):
+
+| Field | Default | Effect |
+| --- | --- | --- |
+| Environment label | `Local` | Prefixes the window title (`Local — Your store`). Not read from the environment. |
+| Store URL | `http://localhost` | Page the shell opens when `NOPCOMMERCE_URL` is unset. |
+
+Precedence for the URL this process loads:
+
+1. `NOPCOMMERCE_URL`, when it is set. `npm run dev:docker` sets `http://localhost`. `npm run dev:dotnet` sets `http://localhost:5000`. The variable does not rewrite `settings.json`.
+2. The store URL saved in Settings.
+3. `http://localhost`.
+
+Saving while `NOPCOMMERCE_URL` is set writes the file for the next launch and leaves this process on the env URL. Saving without that variable opens the new URL immediately. A blank label is stored as `Local`.
+
+The settings window is a local page with its own preload. That preload exposes `get` and `save` only. The storefront preload still does not expose Node.
+
+## Session
+
+The window uses the persistent partition `persist:nopcommerce`. Cookies, localStorage, and IndexedDB for the store are written under Electron's user data directory (`Partitions/nopcommerce` on Linux, inside `~/.config/nopcommerce-electron/`). The `persist:` prefix is required; a partition without it would keep the session in memory only.
+
+Chromium still drops cookies that have no expiry when the process exits. That includes a nopCommerce login with **Remember me** left unchecked, and the guest `.Nop.Customer` cookie. On quit the shell gives those session cookies a 30-day expiry and flushes them. Cookies that already have an expiry are unchanged.
+
+A second `npm run dev` focuses the existing window instead of opening another one, so the same cookie jar is reused.
+
+## Links
+
+Navigation is limited to the store origin this process is using (scheme, host, and port).
+
+- A link or redirect on that origin stays in the window. `target="_blank"` and `window.open` to that origin navigate this window instead of opening a second one.
+- Any other `http` or `https` URL opens in the system browser.
+- `file:`, `javascript:`, `data:`, `blob:`, and other non-web schemes are blocked. The shell's own connection page is the only `file:` document that may load.
+- Subframes may still load `http` and `https` (images, scripts, embedded widgets). They cannot load other schemes.
+
+`loadURL` from Retry and the menu does not go through this click filter, so a down store still shows the connection page.
+
+## `nopcommerce://` stub
+
+The shell calls `setAsDefaultProtocolClient("nopcommerce")`. An unpackaged `electron .` process often is not accepted as the OS handler. A packaged install can register the executable; the handler is still only the path stub described below, not a storefront router.
+
+If a URL is delivered on the command line or via the macOS `open-url` event, the shell navigates to that path on the **configured store origin**:
+
+| Link | Opens |
+| --- | --- |
+| `nopcommerce://cart` | `<store-origin>/cart` |
+| `nopcommerce:///catalog/shoes?color=blue` | `<store-origin>/catalog/shoes?color=blue` |
+
+```bash
+npm run dev -- nopcommerce://cart
+```
+
+The link cannot point the window at another host. Paths are rooted at the origin, so a store mounted on a subpath is not prefixed. There is no product, order, or auth-callback router.
+
+## Security defaults
+
+The window is a remote page, not a Node app:
+
+- `contextIsolation: true`
+- `nodeIntegration: false`
+- `sandbox: true`
+- The preload script exposes `retry` only on the local connection page. The storefront does not get Node, `ipcRenderer`, or that function.
+
+## Package
+
+Unsigned local builds. Installers land in `electron/release/`, which is gitignored.
+
+```bash
+cd electron
+npm install
+npm run pack:dir      # unpacked app for this OS, fastest check
+npm run pack:linux    # .deb and AppImage (run on Linux)
+npm run pack:win      # NSIS installer (run on Windows)
+npm run pack:mac      # dmg and zip (run on macOS)
+```
+
+`electron-builder.yml` lists all three operating systems. A Linux machine can build the Linux packages. Windows and macOS installers need those operating systems; electron-builder will not cross-build a signed macOS app from Linux.
+
+Signing is optional. Names live in `signing.env.example`. Leave them empty, and set `CSC_IDENTITY_AUTO_DISCOVERY=false`, for an unsigned build. Do not commit a certificate or a password.
+
+GitHub Actions (`.github/workflows/electron.yml`) runs `npm test` and `npm run pack:linux` on pull requests that change `electron/`, and on tags named `electron-v*`. The Linux package is uploaded as the artifact `nopcommerce-electron-linux`. The workflow forces `CSC_IDENTITY_AUTO_DISCOVERY=false`, so it does not sign. Windows and macOS artifacts are produced with the local commands above.
+
+## Updates
+
+There is no update server. `publish` in `electron-builder.yml` stays `null`, and unpackaged `npm run dev` does not check.
+
+A packaged app checks only when `NOPCOMMERCE_UPDATE_URL` is an http(s) feed. Names are in `updates.env.example`; leave them empty to keep checks off.
+
+| Variable | Meaning |
+| --- | --- |
+| `NOPCOMMERCE_UPDATE_URL` | Generic feed base URL. Unset means no check. |
+| `NOPCOMMERCE_UPDATE_CHANNEL` | `stable` (electron-updater channel `latest`) or `beta`. |
+| `NOPCOMMERCE_UPDATE_AUTO_DOWNLOAD` | `true` downloads an available build. Otherwise the shell only checks. It does not install on its own. |
+
+Staged rollout is a `stagingPercentage` field in the feed's `latest.yml` or `beta.yml`. This repo does not publish that file.
+
+## Hardening
+
+The running shell keeps `contextIsolation`, `nodeIntegration: false`, and `sandbox: true`.
+
+`scripts/after-pack.js` flips Electron fuses on the packaged binary only. `npm run dev` uses the stock Electron binary and does not flip it.
+
+| Fuse | Packaged |
+| --- | --- |
+| `RunAsNode` | off |
+| `EnableCookieEncryption` | on |
+| `EnableNodeOptionsEnvironmentVariable` | off |
+| `EnableNodeCliInspectArguments` | off |
+| `OnlyLoadAppFromAsar` | on |
+| `GrantFileProtocolExtraPrivileges` | off. The connection and settings pages are self-contained `file:` documents. |
+| `EnableEmbeddedAsarIntegrityValidation` | off. No ASAR integrity hash is embedded, so the fuse would refuse to launch. |
+| `LoadBrowserProcessSpecificV8Snapshot` | off. There is no custom snapshot. |
+
+macOS `hardenedRuntime` stays `false` until `CSC_LINK` is set. An unsigned hardened runtime will not launch.
+
+## Smoke
+
+Ship, or anyone with a display, can launch against a closed port, assert the connection error, and quit. No store is required. Quit any other copy of the shell first; a second process exits immediately.
+
+```bash
+cd electron
+npm run smoke
+```
+
+The script sets `NOPCOMMERCE_URL=http://127.0.0.1:5997/` and a temporary user-data directory. Port 9 is not used: Chromium blocks it as an unsafe port and never shows the connection page. The script passes when the log contains the store URL, `ERR_CONNECTION_REFUSED`, and `Updates disabled`. CI runs the same command under `xvfb-run`.
+
+To smoke a packaged binary:
+
+```bash
+NOPCOMMERCE_SMOKE_BIN=release/linux-unpacked/nopcommerce-electron npm run smoke
+```
+
+## Not in this slice
+
+The `nopcommerce://` handler remains a path stub. Update download stays off unless `NOPCOMMERCE_UPDATE_AUTO_DOWNLOAD=true`, and nothing in this repo is an update server.

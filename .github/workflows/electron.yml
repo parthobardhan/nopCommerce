@@ -1,0 +1,59 @@
+# Tests the Electron shell on every pull request that touches it, and builds a
+# Linux package. macOS and Windows targets are configured in
+# electron/electron-builder.yml; produce those with npm run pack:mac and
+# npm run pack:win on the matching OS. This workflow does not sign artifacts.
+name: Electron
+
+on:
+  pull_request:
+    paths:
+      - "electron/**"
+      - ".github/workflows/electron.yml"
+  push:
+    tags:
+      - "electron-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: electron
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: electron/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: Smoke against an unreachable store
+        run: xvfb-run -a npm run smoke
+
+  package-linux:
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: electron
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: electron/package-lock.json
+      - run: npm ci
+      - name: Build unsigned Linux package
+        run: npm run pack:linux
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nopcommerce-electron-linux
+          path: electron/release/*
+          if-no-files-found: error

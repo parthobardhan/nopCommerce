@@ -1,0 +1,41 @@
+# Unsigned by default. Signing uses the environment variables in signing.env.example.
+# Do not put certificates, passwords, or Apple secrets in this file.
+appId: com.nopcommerce.desktop
+productName: nopCommerce
+copyright: Copyright © nopCommerce contributors
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - "!dist/**/*.test.js"
+  - "!dist/**/*.test.js.map"
+  - static/**
+  - package.json
+asar: true
+# Fuses are flipped in scripts/after-pack.js. macOS hardened runtime stays off
+# until a Developer ID cert is supplied; an unsigned hardened runtime will not launch.
+afterPack: scripts/after-pack.js
+forceCodeSigning: false
+linux:
+  target:
+    - deb
+    - AppImage
+  category: Office
+  synopsis: Desktop shell for a nopCommerce storefront
+win:
+  target:
+    - nsis
+  signtoolOptions:
+    signingHashAlgorithms:
+      - sha256
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.business
+  # null skips the Developer ID identity lookup. Set CSC_LINK to sign.
+  identity: null
+  hardenedRuntime: false
+# No update server. electron-updater stays disabled unless NOPCOMMERCE_UPDATE_URL is set at runtime.
+publish: null
