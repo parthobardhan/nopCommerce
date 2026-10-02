@@ -1693,13 +1693,21 @@ public class AvalaraTaxManager : IDisposable
     /// <summary>
     /// Download a PDF file for the certificate
     /// </summary>
+    /// <param name="customer">Customer requesting the download</param>
     /// <param name="certificateId">The unique ID number of the certificate</param>
     /// <returns>
     /// A task that represents the asynchronous operation
-    /// The task result contains the file details
+    /// The task result contains the file details; null when the certificate is missing or not owned by the customer
     /// </returns>
-    public async Task<FileResult> DownloadCertificateAsync(int certificateId)
+    public async Task<FileResult> DownloadCertificateAsync(Customer customer, int certificateId)
     {
+        ArgumentNullException.ThrowIfNull(customer);
+
+        // Avalara's download API is company-scoped and will return any certificate ID in the account.
+        var certificates = await GetCustomerCertificatesAsync(customer);
+        if (certificates?.Any(certificate => certificate.id == certificateId) != true)
+            return null;
+
         return (await HandleFunctionAsync(() =>
         {
             if (_avalaraTaxSettings.CompanyId is null)
