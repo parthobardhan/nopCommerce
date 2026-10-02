@@ -1,4 +1,4 @@
-export type MenuAction = "reload" | "devtools" | "storefront" | "admin" | "settings";
+export type MenuAction = "reload" | "devtools" | "storefront" | "admin" | "settings" | "notify" | "about";
 
 export type MenuRole = "undo" | "redo" | "cut" | "copy" | "paste" | "selectAll" | "quit";
 
@@ -58,6 +58,14 @@ export function menuSections(devTools: boolean): MenuSection[] {
       ],
     });
   }
+
+  sections.push({
+    label: "Help",
+    entries: [
+      { type: "action", label: "Show notification", action: "notify" },
+      { type: "action", label: "About nopCommerce", action: "about" },
+    ],
+  });
 
   return sections;
 }

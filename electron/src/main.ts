@@ -1,6 +1,8 @@
-import { app, BrowserWindow, ipcMain, screen, session } from "electron";
+import { app, BrowserWindow, Notification, dialog, ipcMain, screen, session } from "electron";
 import path from "node:path";
 import { installAppMenu } from "./app-menu";
+import { destroyTray, installTray } from "./app-tray";
+import { aboutCopy, canDeliverNotification, sampleNotification, shouldHideWhenMinimized } from "./desktop-shell";
 import {
   connectionErrorFile,
   formatLoadFailure,
@@ -179,6 +181,15 @@ function createMainWindow(): BrowserWindow {
       storeWindow = undefined;
     }
   });
+  window.on("minimize", () => {
+    if (!shouldHideWhenMinimized(storedSettings.minimizeToTray)) {
+      return;
+    }
+    // Electron's minimize event cannot be cancelled. Hide after it so the
+    // window leaves the taskbar when the option is on. Wayland often never
+    // emits minimize; tray → Hide window still works.
+    window.hide();
+  });
   window.on("page-title-updated", (event, title) => {
     event.preventDefault();
     applyEnvironmentTitle(window, title);
@@ -293,6 +304,8 @@ function bootstrap(): void {
         const window = BrowserWindow.getFocusedWindow() ?? storefrontWindow();
         window?.webContents.openDevTools({ mode: "detach" });
       },
+      notify: () => showSampleNotification(),
+      about: () => showAbout(),
     },
     devToolsInMenu(app.isPackaged),
   );
@@ -303,6 +316,7 @@ function bootstrap(): void {
       environmentLabel,
       effectiveUrl: storeUrl,
       urlOverriddenByEnv,
+      minimizeToTray: storedSettings.minimizeToTray,
     }),
     save: (input) => {
       const parsed = settingsFromInput(input);
@@ -345,6 +359,18 @@ function bootstrap(): void {
   });
 
   createMainWindow();
+  try {
+    installTray({
+      show: showStorefront,
+      hide: () => storefrontWindow()?.hide(),
+      notify: showSampleNotification,
+      about: showAbout,
+      quit: () => app.quit(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Tray is unavailable: ${message}`);
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -366,9 +392,46 @@ app.on("before-quit", (event) => {
       console.error(`Could not persist session cookies: ${message}`);
     })
     .finally(() => {
+      destroyTray();
       app.quit();
     });
 });
+
+function showStorefront(): void {
+  const window = storefrontWindow() ?? createMainWindow();
+  if (window.isMinimized()) {
+    window.restore();
+  }
+  window.show();
+  window.focus();
+}
+
+function showAbout(): void {
+  const copy = aboutCopy(app.getVersion());
+  void dialog.showMessageBox({
+    type: "info",
+    title: copy.title,
+    message: copy.message,
+    detail: copy.detail,
+    buttons: ["OK"],
+  });
+}
+
+function showSampleNotification(): void {
+  const notice = sampleNotification(app.getVersion());
+  if (!canDeliverNotification(process.platform, Notification.isSupported(), process.env.DBUS_SESSION_BUS_ADDRESS)) {
+    void dialog.showMessageBox({
+      type: "info",
+      title: notice.title,
+      message: "Notifications are not available in this session.",
+      detail: notice.body,
+    });
+    return;
+  }
+  const notification = new Notification({ title: notice.title, body: notice.body });
+  notification.on("click", () => showStorefront());
+  notification.show();
+}
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {

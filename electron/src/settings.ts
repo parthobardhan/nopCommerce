@@ -13,6 +13,8 @@ const MAX_URL_LENGTH = 2000;
 export type ShellSettings = {
   storeUrl: string;
   environmentLabel: string;
+  /** When true, the minimize button hides the window and leaves the tray icon. */
+  minimizeToTray: boolean;
 };
 
 export type LaunchSettings = {
@@ -29,6 +31,7 @@ export function defaultShellSettings(): ShellSettings {
   return {
     storeUrl: resolveStoreUrl(undefined),
     environmentLabel: DEFAULT_ENVIRONMENT_LABEL,
+    minimizeToTray: false,
   };
 }
 
@@ -86,6 +89,7 @@ export function parseStoredSettings(raw: string): ShellSettings | null {
   return {
     storeUrl,
     environmentLabel: normalizeEnvironmentLabel(record.environmentLabel),
+    minimizeToTray: record.minimizeToTray === true,
   };
 }
 
@@ -108,8 +112,13 @@ export function writeSettings(filePath: string, settings: ShellSettings): void {
  * `NOPCOMMERCE_URL` wins for this process so `dev:docker` and `dev:dotnet` keep
  * their paired URL. It does not replace the saved settings file.
  */
-export function resolveLaunchSettings(saved: ShellSettings | null, env: NodeJS.ProcessEnv): LaunchSettings {
-  const stored = saved ?? defaultShellSettings();
+export function resolveLaunchSettings(
+  saved: { storeUrl: string; environmentLabel: string; minimizeToTray?: boolean } | null,
+  env: NodeJS.ProcessEnv,
+): LaunchSettings {
+  const stored: ShellSettings = saved
+    ? { ...saved, minimizeToTray: saved.minimizeToTray === true }
+    : defaultShellSettings();
   const envValue = env[STORE_URL_ENV];
   if (envValue?.trim()) {
     return {
@@ -145,6 +154,7 @@ export function settingsFromInput(input: unknown): SettingsFormResult {
       settings: {
         storeUrl: resolveStoreUrl(record.storeUrl),
         environmentLabel: normalizeEnvironmentLabel(record.environmentLabel),
+        minimizeToTray: record.minimizeToTray === true,
       },
     };
   } catch (error) {

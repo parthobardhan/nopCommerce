@@ -51,8 +51,14 @@ test("rejects a blank or non-http settings URL and normalizes the label", () => 
   const saved = settingsFromInput({ storeUrl: "http://localhost:5000", environmentLabel: "  QA\nlab  " });
   assert.deepEqual(saved, {
     ok: true,
-    settings: { storeUrl: "http://localhost:5000/", environmentLabel: "QA lab" },
+    settings: { storeUrl: "http://localhost:5000/", environmentLabel: "QA lab", minimizeToTray: false },
   });
+  const withTray = settingsFromInput({
+    storeUrl: "http://localhost:5000",
+    environmentLabel: "QA",
+    minimizeToTray: true,
+  });
+  assert.equal(withTray.ok && withTray.settings.minimizeToTray, true);
   assert.equal(normalizeEnvironmentLabel(""), DEFAULT_ENVIRONMENT_LABEL);
 });
 
@@ -65,8 +71,13 @@ test("admin and storefront shortcuts stay on the store origin", () => {
 test("round-trips settings on disk", () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nop-settings-"));
   const file = settingsFile(directory);
-  const settings = { storeUrl: "http://localhost/", environmentLabel: "Docker" };
+  const settings = { storeUrl: "http://localhost/", environmentLabel: "Docker", minimizeToTray: true };
   writeSettings(file, settings);
   assert.deepEqual(readSettings(file), settings);
+  writeSettings(file, { storeUrl: "http://localhost/", environmentLabel: "Docker", minimizeToTray: false });
+  const legacy = JSON.parse(fs.readFileSync(file, "utf8")) as { minimizeToTray?: boolean };
+  delete legacy.minimizeToTray;
+  fs.writeFileSync(file, JSON.stringify(legacy));
+  assert.equal(readSettings(file)?.minimizeToTray, false);
   assert.equal(readSettings(path.join(directory, "missing.json")), null);
 });

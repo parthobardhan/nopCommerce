@@ -16,5 +16,7 @@ test("dev menu exposes Reload, Quit, DevTools, and store shortcuts", () => {
   assert.ok(labels.includes("Reload"));
   assert.ok(labels.includes("Quit"));
   assert.ok(labels.includes("Open DevTools"));
+  assert.ok(labels.includes("Show notification"));
+  assert.ok(labels.includes("About nopCommerce"));
   assert.equal(labels.filter((label) => label === "Reload").length, 1);
 });

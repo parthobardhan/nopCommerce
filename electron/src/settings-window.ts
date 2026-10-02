@@ -7,12 +7,13 @@ export type SettingsView = {
   environmentLabel: string;
   effectiveUrl: string;
   urlOverriddenByEnv: boolean;
+  minimizeToTray: boolean;
 };
 
 export type SettingsSaveResponse = {
   ok: boolean;
   message: string;
-  settings?: { storeUrl: string; environmentLabel: string };
+  settings?: { storeUrl: string; environmentLabel: string; minimizeToTray: boolean };
 };
 
 type SettingsHost = {
@@ -25,7 +26,13 @@ let settingsWindow: BrowserWindow | undefined;
 export function registerSettingsIpc(host: SettingsHost): void {
   ipcMain.handle(SETTINGS_GET_CHANNEL, (event) => {
     if (!isSettingsSender(event.sender)) {
-      return { storedUrl: "", environmentLabel: "", effectiveUrl: "", urlOverriddenByEnv: false };
+      return {
+        storedUrl: "",
+        environmentLabel: "",
+        effectiveUrl: "",
+        urlOverriddenByEnv: false,
+        minimizeToTray: false,
+      };
     }
     return host.getView();
   });
@@ -50,7 +57,7 @@ export function openSettingsWindow(parent: BrowserWindow | undefined): void {
 
   const window = new BrowserWindow({
     width: 460,
-    height: 420,
+    height: 490,
     title: "Settings",
     parent,
     resizable: false,

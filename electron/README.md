@@ -96,6 +96,14 @@ The shell writes `window-state.json` under Electron's user data directory (on Li
 - **File → Quit** (`Cmd/Ctrl+Q`).
 - **Edit** keeps undo, cut, copy, and paste so the store forms still work.
 - **View → Open DevTools** (`Cmd/Ctrl+Shift+I`) is added only when the app is not packaged. `npm run dev` and `npm run start` are unpackaged, so DevTools is available. A future packaged build omits the item.
+- **Help → About nopCommerce** shows the shell version from `package.json` (`0.1.0` today).
+- **Help → Show notification** posts one fixed Electron notification. It is a stub: there is no order or store event behind it. If notifications are unsupported, or Linux has no real session bus (`DBUS_SESSION_BUS_ADDRESS` is missing or `disabled:`), the same text opens in a dialog instead. `libnotify` cannot deliver to `disabled:`.
+
+## Tray
+
+A tray icon is created when the shell starts. The log line `Tray icon created` means the icon object exists. It only shows up in a desktop panel that implements StatusNotifier or AppIndicator. A session without that panel (this VM's dbus bus is one example) still runs the shell; use the Help menu for About and the notification stub. **Show window** and a tray click bring the store forward. **Hide window** hides it without quitting. **Quit** exits.
+
+Closing the window with the title-bar button still quits, same as File → Quit. Minimize stays on the taskbar unless Settings → **Hide to the tray when minimized** is checked. That option is off by default and is stored in `settings.json`. With it on, minimizing hides the window and leaves the tray icon. Tray → **Hide window** does the same without the setting. Click the icon, or choose **Show window**, to bring it back. On Wayland the minimize button may not emit a minimize event, so use Hide window from the tray. Linux often opens the tray menu on click instead of the window; Show window is the first item.
 
 ## Settings
 
