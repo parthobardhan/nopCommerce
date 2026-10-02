@@ -6,9 +6,11 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "npm run build && electron .",
+    "dev:docker": "npm run build && node scripts/dev-paired.js docker",
+    "dev:dotnet": "npm run build && node scripts/dev-paired.js dotnet",
     "build": "tsc -p tsconfig.json",
     "start": "electron .",
-    "test": "npm run build && node --test dist/store-url.test.js"
+    "test": "npm run build && node --test dist/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
