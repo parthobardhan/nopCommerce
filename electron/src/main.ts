@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Notification, dialog, ipcMain, screen, session } from "electron";
+import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import { installAppMenu } from "./app-menu";
 import { destroyTray, installTray } from "./app-tray";
@@ -30,6 +31,7 @@ import {
   type ShellSettings,
 } from "./settings";
 import { openSettingsWindow, registerSettingsIpc } from "./settings-window";
+import { planUpdateCheck, UPDATE_AUTO_DOWNLOAD_ENV, UPDATE_CHANNEL_ENV, UPDATE_URL_ENV } from "./updates";
 import {
   readWindowState,
   resolveInitialBounds,
@@ -359,6 +361,7 @@ function bootstrap(): void {
   });
 
   createMainWindow();
+  scheduleUpdateCheck();
   try {
     installTray({
       show: showStorefront,
@@ -433,8 +436,39 @@ function showSampleNotification(): void {
   notification.show();
 }
 
+function scheduleUpdateCheck(): void {
+  const plan = planUpdateCheck({
+    isPackaged: app.isPackaged,
+    feedUrl: process.env[UPDATE_URL_ENV],
+    channel: process.env[UPDATE_CHANNEL_ENV],
+    autoDownload: process.env[UPDATE_AUTO_DOWNLOAD_ENV],
+  });
+  if (plan.mode === "disabled") {
+    console.log(`Updates disabled: ${plan.reason}`);
+    return;
+  }
+
+  autoUpdater.autoDownload = plan.autoDownload;
+  autoUpdater.channel = plan.channel;
+  autoUpdater.setFeedURL({ provider: "generic", url: plan.feedUrl, channel: plan.channel });
+  autoUpdater.on("error", (error) => {
+    console.error(`Update check failed: ${error.message}`);
+  });
+  autoUpdater.on("update-available", (info) => {
+    console.log(`Update available on ${plan.channel}: ${info.version}`);
+  });
+  autoUpdater.on("update-not-available", () => {
+    console.log("No update available");
+  });
+  void autoUpdater.checkForUpdates().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Update check failed: ${message}`);
+  });
+}
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
+  console.error("Another nopCommerce shell is already running. Quit it before starting another.");
   app.quit();
 } else {
   registerProtocolStub();

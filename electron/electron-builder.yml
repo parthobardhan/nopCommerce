@@ -8,9 +8,14 @@ directories:
   buildResources: build
 files:
   - dist/**
+  - "!dist/**/*.test.js"
+  - "!dist/**/*.test.js.map"
   - static/**
   - package.json
 asar: true
+# Fuses are flipped in scripts/after-pack.js. macOS hardened runtime stays off
+# until a Developer ID cert is supplied; an unsigned hardened runtime will not launch.
+afterPack: scripts/after-pack.js
 forceCodeSigning: false
 linux:
   target:
@@ -31,4 +36,6 @@ mac:
   category: public.app-category.business
   # null skips the Developer ID identity lookup. Set CSC_LINK to sign.
   identity: null
+  hardenedRuntime: false
+# No update server. electron-updater stays disabled unless NOPCOMMERCE_UPDATE_URL is set at runtime.
 publish: null

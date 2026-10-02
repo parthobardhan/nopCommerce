@@ -31,6 +31,8 @@ jobs:
           cache-dependency-path: electron/package-lock.json
       - run: npm ci
       - run: npm test
+      - name: Smoke against an unreachable store
+        run: xvfb-run -a npm run smoke
 
   package-linux:
     needs: test

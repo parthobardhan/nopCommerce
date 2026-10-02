@@ -188,6 +188,56 @@ Signing is optional. Names live in `signing.env.example`. Leave them empty, and 
 
 GitHub Actions (`.github/workflows/electron.yml`) runs `npm test` and `npm run pack:linux` on pull requests that change `electron/`, and on tags named `electron-v*`. The Linux package is uploaded as the artifact `nopcommerce-electron-linux`. The workflow forces `CSC_IDENTITY_AUTO_DISCOVERY=false`, so it does not sign. Windows and macOS artifacts are produced with the local commands above.
 
+## Updates
+
+There is no update server. `publish` in `electron-builder.yml` stays `null`, and unpackaged `npm run dev` does not check.
+
+A packaged app checks only when `NOPCOMMERCE_UPDATE_URL` is an http(s) feed. Names are in `updates.env.example`; leave them empty to keep checks off.
+
+| Variable | Meaning |
+| --- | --- |
+| `NOPCOMMERCE_UPDATE_URL` | Generic feed base URL. Unset means no check. |
+| `NOPCOMMERCE_UPDATE_CHANNEL` | `stable` (electron-updater channel `latest`) or `beta`. |
+| `NOPCOMMERCE_UPDATE_AUTO_DOWNLOAD` | `true` downloads an available build. Otherwise the shell only checks. It does not install on its own. |
+
+Staged rollout is a `stagingPercentage` field in the feed's `latest.yml` or `beta.yml`. This repo does not publish that file.
+
+## Hardening
+
+The running shell keeps `contextIsolation`, `nodeIntegration: false`, and `sandbox: true`.
+
+`scripts/after-pack.js` flips Electron fuses on the packaged binary only. `npm run dev` uses the stock Electron binary and does not flip it.
+
+| Fuse | Packaged |
+| --- | --- |
+| `RunAsNode` | off |
+| `EnableCookieEncryption` | on |
+| `EnableNodeOptionsEnvironmentVariable` | off |
+| `EnableNodeCliInspectArguments` | off |
+| `OnlyLoadAppFromAsar` | on |
+| `GrantFileProtocolExtraPrivileges` | off. The connection and settings pages are self-contained `file:` documents. |
+| `EnableEmbeddedAsarIntegrityValidation` | off. No ASAR integrity hash is embedded, so the fuse would refuse to launch. |
+| `LoadBrowserProcessSpecificV8Snapshot` | off. There is no custom snapshot. |
+
+macOS `hardenedRuntime` stays `false` until `CSC_LINK` is set. An unsigned hardened runtime will not launch.
+
+## Smoke
+
+Ship, or anyone with a display, can launch against a closed port, assert the connection error, and quit. No store is required. Quit any other copy of the shell first; a second process exits immediately.
+
+```bash
+cd electron
+npm run smoke
+```
+
+The script sets `NOPCOMMERCE_URL=http://127.0.0.1:5997/` and a temporary user-data directory. Port 9 is not used: Chromium blocks it as an unsafe port and never shows the connection page. The script passes when the log contains the store URL, `ERR_CONNECTION_REFUSED`, and `Updates disabled`. CI runs the same command under `xvfb-run`.
+
+To smoke a packaged binary:
+
+```bash
+NOPCOMMERCE_SMOKE_BIN=release/linux-unpacked/nopcommerce-electron npm run smoke
+```
+
 ## Not in this slice
 
-No auto-update. The `nopcommerce://` handler remains a path stub.
+The `nopcommerce://` handler remains a path stub. Update download stays off unless `NOPCOMMERCE_UPDATE_AUTO_DOWNLOAD=true`, and nothing in this repo is an update server.
