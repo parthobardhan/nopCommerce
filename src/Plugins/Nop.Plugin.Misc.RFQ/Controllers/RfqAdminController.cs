@@ -199,7 +199,7 @@ public class RfqAdminController : BasePluginController
                 ProductId = product.Id,
                 OfferedQty = quantity,
                 QuoteId = quoteId,
-                OfferedUnitPrice = unitPriceInclTax
+                OfferedUnitPrice = await _rfqService.ConvertInclusiveUnitPriceToCatalogBasisAsync(product, customer, unitPriceInclTax)
             };
 
             await _rfqService.InsertQuoteItemAsync(quoteItem);

@@ -1,9 +1,11 @@
 ﻿using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using Nop.Core;
+using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Common;
 using Nop.Core.Domain.Customers;
 using Nop.Core.Domain.Orders;
+using Nop.Core.Domain.Tax;
 using Nop.Core.Http.Extensions;
 using Nop.Data;
 using Nop.Plugin.Misc.RFQ.Domains;
@@ -61,6 +63,7 @@ public class RfqService
     private readonly IWorkContext _workContext;
     private readonly IHtmlFormatter _htmlFormatter;
     private readonly RfqMessageService _rfqMessageService;
+    private readonly TaxSettings _taxSettings;
 
     #endregion
 
@@ -93,7 +96,8 @@ public class RfqService
         IWebHelper webHelper,
         IWorkContext workContext,
         IHtmlFormatter htmlFormatter,
-        RfqMessageService rfqMessageService)
+        RfqMessageService rfqMessageService,
+        TaxSettings taxSettings)
     {
         _currencyService = currencyService;
         _customerService = customerService;
@@ -123,11 +127,34 @@ public class RfqService
         _workContext = workContext;
         _htmlFormatter = htmlFormatter;
         _rfqMessageService = rfqMessageService;
+        _taxSettings = taxSettings;
     }
 
     #endregion
 
     #region Utilities
+
+    /// <summary>
+    /// Converts an inclusive-tax unit price to the catalog basis used by checkout.
+    /// <see cref="EventConsumer"/> applies <see cref="QuoteItem.OfferedUnitPrice"/> as
+    /// <c>GetUnitPrice</c>, which is primary-store currency on the catalog tax basis
+    /// (<see cref="TaxSettings.PricesIncludeTax"/>).
+    /// </summary>
+    public async Task<decimal> ConvertInclusiveUnitPriceToCatalogBasisAsync(Product product, Customer customer, decimal unitPriceInclTax)
+    {
+        ArgumentNullException.ThrowIfNull(product);
+        ArgumentNullException.ThrowIfNull(customer);
+
+        var (catalogPrice, _) = await _taxService.GetProductPriceAsync(
+            product,
+            product.TaxCategoryId,
+            unitPriceInclTax,
+            includingTax: _taxSettings.PricesIncludeTax,
+            customer,
+            priceIncludesTax: true);
+
+        return catalogPrice;
+    }
 
     private async Task<PdfSettings> GetPdfSettingsAsync(Quote quote)
     {
@@ -342,8 +369,9 @@ public class RfqService
 
         var items = await cart.SelectAwait(async item =>
         {
-            var (shoppingCartUnitPriceWithDiscountBase, _) = await _taxService.GetProductPriceAsync(await _productService.GetProductByIdAsync(item.ProductId),
-                (await _shoppingCartService.GetUnitPriceAsync(item, true)).unitPrice);
+            // Store catalog-basis unit price. GetProductPriceAsync would return the tax-display
+            // amount, which checkout then taxes again when EventConsumer sets OfferedUnitPrice.
+            var shoppingCartUnitPriceWithDiscountBase = (await _shoppingCartService.GetUnitPriceAsync(item, true)).unitPrice;
 
             var requestQuoteItem = new RequestQuoteItem
             {
