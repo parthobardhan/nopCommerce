@@ -1,3 +1,4 @@
+@using System.Globalization
 @using Nop.Plugin.Misc.RFQ.Models.Admin
 @model RequestQuoteModel
 
@@ -40,7 +41,7 @@
             <td>
                 <div>@item.RequestedUnitPrice</div>
                 <div id="pnlEditUnitPrice@(item.Id)">
-                    <input name="unitPrice@(item.Id)" type="text" value="@item.RequestedUnitPriceValue" id="unitPrice@(item.Id)" class="form-control input-sm"/>
+                    <input name="unitPrice@(item.Id)" type="text" value="@item.RequestedUnitPriceValue.ToString(CultureInfo.InvariantCulture)" id="unitPrice@(item.Id)" class="form-control input-sm"/>
                 </div>
             </td>
             <td>

@@ -1,5 +1,4 @@
-﻿using System.Globalization;
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Nop.Core;
 using Nop.Core.Domain.Orders;
@@ -168,12 +167,14 @@ public class RfqAdminController : BasePluginController
         var product = await _productService.GetProductByIdAsync(productId)
             ?? throw new ArgumentException("No product found with the specified id");
 
-        //basic properties
-        _ = decimal.TryParse(form["UnitPriceInclTax"], NumberStyles.Any, CultureInfo.InvariantCulture, out var unitPriceInclTax);
-        _ = int.TryParse(form["Quantity"], out var quantity);
-
         //warnings
         var warnings = new List<string>();
+
+        if (!RfqFormValueParser.TryParseDecimal(form["UnitPriceInclTax"], out var unitPriceInclTax) || unitPriceInclTax < 0)
+            warnings.Add(string.Format(await _localizationService.GetResourceAsync("Plugins.Misc.RFQ.CustomerRequest.RequestedUnitPrice.MustBeEqualOrGreaterThanZero"), product.Name));
+
+        if (!RfqFormValueParser.TryParsePositiveQuantity(form["Quantity"], out var quantity))
+            warnings.Add(string.Format(await _localizationService.GetResourceAsync("Plugins.Misc.RFQ.CustomerRequest.RequestedQty.MustGreaterThanZero"), product.Name));
 
         //attributes
         var attributesXml = await _productAttributeParser.ParseProductAttributesAsync(product, form, warnings);
@@ -358,8 +359,16 @@ public class RfqAdminController : BasePluginController
         if (requestQuoteItemId <= 0)
             return await AdminRequest(id);
 
-        int.TryParse(form[$"quantity{requestQuoteItemId}"], out var requestedQty);
-        decimal.TryParse(form[$"unitPrice{requestQuoteItemId}"], NumberStyles.Any, CultureInfo.InvariantCulture, out var requestedUnitPrice);
+        var requestQuoteItem = await _rfqService.GetRequestQuoteItemByIdAsync(requestQuoteItemId);
+        if (requestQuoteItem == null)
+            return await AdminRequest(id);
+
+        // Fail closed: culture-formatted or missing fields must not overwrite the stored price/qty with 0.
+        if (!RfqFormValueParser.TryParsePositiveQuantity(form[$"quantity{requestQuoteItemId}"], out var requestedQty))
+            requestedQty = requestQuoteItem.RequestedQty;
+
+        if (!RfqFormValueParser.TryParseDecimal(form[$"unitPrice{requestQuoteItemId}"], out var requestedUnitPrice) || requestedUnitPrice < 0)
+            requestedUnitPrice = requestQuoteItem.RequestedUnitPrice;
 
         await _rfqService.UpdateRequestQuoteItemAsync(requestQuoteItemId, requestedQty, requestedUnitPrice);
 
@@ -653,8 +662,16 @@ public class RfqAdminController : BasePluginController
         if (quoteItemId <= 0)
             return await AdminQuote(id);
 
-        int.TryParse(form[$"quantity{quoteItemId}"], out var offeredQty);
-        decimal.TryParse(form[$"unitPrice{quoteItemId}"], NumberStyles.Any, CultureInfo.InvariantCulture, out var offeredUnitPrice);
+        var quoteItem = await _rfqService.GetQuoteItemByIdAsync(quoteItemId);
+        if (quoteItem == null)
+            return await AdminQuote(id);
+
+        // Fail closed: culture-formatted or missing fields must not overwrite the stored price/qty with 0.
+        if (!RfqFormValueParser.TryParsePositiveQuantity(form[$"quantity{quoteItemId}"], out var offeredQty))
+            offeredQty = quoteItem.OfferedQty;
+
+        if (!RfqFormValueParser.TryParseDecimal(form[$"unitPrice{quoteItemId}"], out var offeredUnitPrice) || offeredUnitPrice < 0)
+            offeredUnitPrice = quoteItem.OfferedUnitPrice;
 
         await _rfqService.UpdateQuoteItemAsync(quoteItemId, offeredQty, offeredUnitPrice);
 
