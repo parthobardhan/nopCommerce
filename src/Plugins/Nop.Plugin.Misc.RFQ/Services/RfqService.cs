@@ -229,7 +229,7 @@ public class RfqService
                     await UpdateQuantityWithLogAsync(requestQuoteItem, quantity);
                 break;
             case RfqDefaults.UNIT_PRICE_FORM_KEY:
-                if (decimal.TryParse(formValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var price) && requestQuoteItem.RequestedUnitPrice != price)
+                if (RfqFormValueParser.TryParseDecimal(formValue, out var price) && price >= 0 && requestQuoteItem.RequestedUnitPrice != price)
                     await UpdateUnitPriceWithLogAsync(requestQuoteItem, price);
 
                 break;

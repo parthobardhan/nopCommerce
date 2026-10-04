@@ -135,7 +135,7 @@ public class RfqCustomerController : BasePublicController
 
             var formValue = form[key];
 
-            if (!decimal.TryParse(formValue, out var unitPrice))
+            if (!RfqFormValueParser.TryParseDecimal(formValue, out var unitPrice))
                 return;
 
             requestQuoteItem.RequestedUnitPrice = unitPrice;
