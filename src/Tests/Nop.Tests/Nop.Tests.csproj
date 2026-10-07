@@ -29,6 +29,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\Plugins\Nop.Plugin.Tax.Avalara\Services\AvalaraRefund.cs" Link="Nop.Plugin.Tax.Avalara.Tests\AvalaraRefund.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Update="Connections.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Connections.Designer.cs</LastGenOutput>
