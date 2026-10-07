@@ -1472,12 +1472,12 @@ public class AvalaraTaxManager : IDisposable
                 refundType = RefundType.Full
             };
 
-            //whether it's a partial refund
-            var isPartialRefund = amountToRefund < order.OrderTotal;
-            if (isPartialRefund)
+            // nopCommerce refunds are tax-inclusive; Avalara percentage is of the original document
+            var refundPercentage = AvalaraRefund.GetDocumentRefundPercentage(order.OrderTotal, amountToRefund);
+            if (refundPercentage.HasValue)
             {
                 model.refundType = RefundType.Percentage;
-                model.refundPercentage = amountToRefund / (order.OrderTotal - order.OrderTax) * 100;
+                model.refundPercentage = refundPercentage.Value;
             }
 
             transaction = ServiceClient.RefundTransaction(_avalaraTaxSettings.CompanyCode, transaction.code, null, null, null, model)
