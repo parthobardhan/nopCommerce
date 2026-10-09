@@ -1713,13 +1713,15 @@ public partial class OrderController : BaseAdminController
 
             await LogEditOrderAsync(order.Id);
 
-            //gift cards
+            //gift cards (skip cards already created by UpdateOrderTotalsAsync)
             if (product.IsGiftCard)
             {
+                var existingGiftCards = await _giftCardService.GetGiftCardsByPurchasedWithOrderItemIdAsync(orderItem.Id);
+                var cardsToCreate = orderItem.Quantity - existingGiftCards.Count;
                 _productAttributeParser.GetGiftCardAttribute(
                     attributesXml, out var recipientName, out var recipientEmail, out var senderName, out var senderEmail, out var giftCardMessage);
 
-                for (var i = 0; i < orderItem.Quantity; i++)
+                for (var i = 0; i < cardsToCreate; i++)
                 {
                     var gc = new GiftCard
                     {

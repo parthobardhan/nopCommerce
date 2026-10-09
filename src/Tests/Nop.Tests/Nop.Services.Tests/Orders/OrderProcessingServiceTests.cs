@@ -1,9 +1,12 @@
 ﻿using AwesomeAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Orders;
 using Nop.Core.Domain.Payments;
 using Nop.Core.Domain.Shipping;
 using Nop.Data;
+using Nop.Services.Catalog;
+using Nop.Services.Configuration;
 using Nop.Services.Orders;
 using Nop.Services.Payments;
 using Nop.Tests.Nop.Services.Tests.Payments;
@@ -694,5 +697,128 @@ public class OrderProcessingServiceTests : ServiceTest
         await _orderService.InsertRecurringPaymentHistoryAsync(new RecurringPaymentHistory { RecurringPaymentId = rp.Id });
         cyclesRemaining = await _orderProcessingService.GetCyclesRemainingAsync(rp);
         cyclesRemaining.Should().Be(0);
+    }
+
+    [Test]
+    public async Task UpdateOrderTotalsShouldNotReissueGiftCardsAlreadyAttachedToTheLine()
+    {
+        var productService = GetService<IProductService>();
+        var giftCardService = GetService<IGiftCardService>();
+        var settingService = GetService<ISettingService>();
+        var orderSettings = GetService<OrderSettings>();
+        var previousAutoUpdate = orderSettings.AutoUpdateOrderTotalsOnEditingOrder;
+
+        Product product = null;
+        Order order = null;
+        OrderItem orderItem = null;
+
+        try
+        {
+            product = new Product
+            {
+                Name = "Gift card reissue test",
+                Published = true,
+                VisibleIndividually = true,
+                IsGiftCard = true,
+                GiftCardType = GiftCardType.Virtual,
+                Price = 25,
+                CreatedOnUtc = DateTime.UtcNow,
+                UpdatedOnUtc = DateTime.UtcNow
+            };
+            await productService.InsertProductAsync(product);
+
+            order = new Order
+            {
+                CustomOrderNumber = string.Empty,
+                CustomerId = 1,
+                BillingAddressId = 1,
+                StoreId = 1,
+                CreatedOnUtc = DateTime.UtcNow
+            };
+            await _orderService.InsertOrderAsync(order);
+
+            orderItem = new OrderItem
+            {
+                OrderItemGuid = Guid.NewGuid(),
+                OrderId = order.Id,
+                ProductId = product.Id,
+                Quantity = 1,
+                UnitPriceExclTax = 25,
+                UnitPriceInclTax = 25,
+                PriceExclTax = 25,
+                PriceInclTax = 25
+            };
+            await _orderService.InsertOrderItemAsync(orderItem);
+
+            await giftCardService.InsertGiftCardAsync(new GiftCard
+            {
+                GiftCardType = GiftCardType.Virtual,
+                PurchasedWithOrderItemId = orderItem.Id,
+                Amount = 25,
+                GiftCardCouponCode = giftCardService.GenerateGiftCardCode(),
+                CreatedOnUtc = DateTime.UtcNow
+            });
+
+            orderSettings.AutoUpdateOrderTotalsOnEditingOrder = true;
+            await settingService.SaveSettingAsync(orderSettings);
+
+            using var scope = GetService<IServiceScopeFactory>().CreateScope();
+            var orderProcessingService = scope.ServiceProvider.GetRequiredService<IOrderProcessingService>();
+
+            await orderProcessingService.UpdateOrderTotalsAsync(new UpdateOrderParameters(order, orderItem)
+            {
+                Quantity = 1,
+                PriceExclTax = 25,
+                PriceInclTax = 25,
+                SubTotalExclTax = 25,
+                SubTotalInclTax = 25
+            });
+
+            (await giftCardService.GetGiftCardsByPurchasedWithOrderItemIdAsync(orderItem.Id))
+                .Count.Should().Be(1);
+
+            await orderProcessingService.UpdateOrderTotalsAsync(new UpdateOrderParameters(order, orderItem)
+            {
+                Quantity = 2,
+                PriceExclTax = 25,
+                PriceInclTax = 25,
+                SubTotalExclTax = 50,
+                SubTotalInclTax = 50
+            });
+
+            (await giftCardService.GetGiftCardsByPurchasedWithOrderItemIdAsync(orderItem.Id))
+                .Count.Should().Be(2);
+
+            await orderProcessingService.UpdateOrderTotalsAsync(new UpdateOrderParameters(order, orderItem)
+            {
+                Quantity = 2,
+                PriceExclTax = 25,
+                PriceInclTax = 25,
+                SubTotalExclTax = 50,
+                SubTotalInclTax = 50
+            });
+
+            (await giftCardService.GetGiftCardsByPurchasedWithOrderItemIdAsync(orderItem.Id))
+                .Count.Should().Be(2);
+        }
+        finally
+        {
+            orderSettings.AutoUpdateOrderTotalsOnEditingOrder = previousAutoUpdate;
+            await settingService.SaveSettingAsync(orderSettings);
+
+            if (orderItem != null)
+            {
+                foreach (var giftCard in await giftCardService.GetGiftCardsByPurchasedWithOrderItemIdAsync(orderItem.Id))
+                    await giftCardService.DeleteGiftCardAsync(giftCard);
+
+                await _orderService.DeleteOrderItemAsync(orderItem);
+            }
+
+            if (order != null)
+                await GetService<IRepository<Order>>().DeleteAsync(order);
+
+            if (product != null)
+                await productService.DeleteProductAsync(product);
+        }
     }
 }
