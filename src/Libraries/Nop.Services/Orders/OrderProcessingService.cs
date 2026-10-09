@@ -1361,9 +1361,16 @@ public partial class OrderProcessingService : IOrderProcessingService
         if (!product.IsGiftCard)
             return;
 
+        // Place-order, admin add-item, and auto-update totals can all call this for the same line.
+        // Only issue cards that are not already attached to the order item.
+        var existingCount = (await _giftCardService.GetGiftCardsByPurchasedWithOrderItemIdAsync(orderItem.Id)).Count;
+        var cardsToCreate = quantity - existingCount;
+        if (cardsToCreate <= 0)
+            return;
+
         _productAttributeParser.GetGiftCardAttribute(attributesXml, out var giftCardRecipientName, out var giftCardRecipientEmail, out var giftCardSenderName, out var giftCardSenderEmail, out var giftCardMessage);
 
-        for (var i = 0; i < quantity; i++)
+        for (var i = 0; i < cardsToCreate; i++)
         {
             await _giftCardService.InsertGiftCardAsync(new GiftCard
             {
