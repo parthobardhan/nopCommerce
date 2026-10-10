@@ -1,5 +1,6 @@
 ﻿using AwesomeAssertions;
 using Nop.Core.Domain.Orders;
+using Nop.Data;
 using Nop.Services.Orders;
 using NUnit.Framework;
 
@@ -79,5 +80,51 @@ public class GiftCardServiceTests : ServiceTest
 
         var remainingAmount = await _giftCardService.GetGiftCardRemainingAmountAsync(_giftCard2);
         remainingAmount.Should().Be(45);
+    }
+
+    [Test]
+    public async Task DeleteOrderItemThrowsWhenPurchasedGiftCardsExist()
+    {
+        var orderService = GetService<IOrderService>();
+        var orderItemRepository = GetService<IRepository<OrderItem>>();
+
+        var orderItem = new OrderItem
+        {
+            OrderItemGuid = Guid.NewGuid(),
+            OrderId = 1,
+            ProductId = 1,
+            Quantity = 1
+        };
+        await orderService.InsertOrderItemAsync(orderItem);
+
+        var giftCard = new GiftCard
+        {
+            Amount = 50,
+            IsGiftCardActivated = true,
+            PurchasedWithOrderItemId = orderItem.Id,
+            GiftCardCouponCode = "ORPHAN-QTY0"
+        };
+        await _giftCardService.InsertGiftCardAsync(giftCard);
+
+        try
+        {
+            (await _giftCardService.GetGiftCardsByPurchasedWithOrderItemIdAsync(orderItem.Id))
+                .Should().Contain(gc => gc.Id == giftCard.Id);
+
+            var deleteException = Assert.CatchAsync(async () => await orderService.DeleteOrderItemAsync(orderItem));
+            deleteException.Should().NotBeNull();
+
+            (await orderItemRepository.GetByIdAsync(orderItem.Id)).Should().NotBeNull();
+            (await _giftCardService.GetGiftCardsByPurchasedWithOrderItemIdAsync(orderItem.Id))
+                .Should().Contain(gc => gc.Id == giftCard.Id);
+            (await _giftCardService.IsGiftCardValidAsync(giftCard)).Should().BeTrue();
+        }
+        finally
+        {
+            await _giftCardService.DeleteGiftCardAsync(giftCard);
+            var leftover = await orderItemRepository.GetByIdAsync(orderItem.Id);
+            if (leftover != null)
+                await orderItemRepository.DeleteAsync(leftover);
+        }
     }
 }

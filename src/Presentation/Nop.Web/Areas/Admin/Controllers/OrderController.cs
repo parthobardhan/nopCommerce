@@ -1289,6 +1289,18 @@ public partial class OrderController : BaseAdminController
         }
         else
         {
+            //quantity 0 is the same as Delete — do not bypass the gift card guard
+            if ((await _giftCardService.GetGiftCardsByPurchasedWithOrderItemIdAsync(orderItem.Id)).Any())
+            {
+                //we cannot delete an order item with associated gift cards
+                //a store owner should delete them first
+
+                _notificationService.ErrorNotification(await _localizationService.GetResourceAsync("Admin.Orders.OrderItem.DeleteAssociatedGiftCardRecordError"));
+                SaveSelectedCardName("order-products");
+
+                return RedirectToAction("Edit", new { id = order.Id });
+            }
+
             //adjust inventory
             await _productService.AdjustInventoryAsync(product, orderItem.Quantity, orderItem.AttributesXml,
                 string.Format(await _localizationService.GetResourceAsync("Admin.StockQuantityHistory.Messages.DeleteOrderItem"), order.Id));
