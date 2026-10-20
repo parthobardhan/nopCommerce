@@ -43,6 +43,39 @@ public class DiscountServiceTests : ServiceTest
     }
 
     [Test]
+    public async Task GetAllDiscountsShouldHonorVendorId()
+    {
+        var storeDiscount = CreateDiscount();
+        storeDiscount.Name = "Store vendor-scope test";
+        storeDiscount.CouponCode = "STORE-VENDOR-SCOPE";
+        storeDiscount.VendorId = null;
+
+        var vendorDiscount = CreateDiscount();
+        vendorDiscount.Name = "Vendor vendor-scope test";
+        vendorDiscount.CouponCode = "VENDOR-VENDOR-SCOPE";
+        vendorDiscount.VendorId = 99;
+
+        await _discountService.InsertDiscountAsync(storeDiscount);
+        await _discountService.InsertDiscountAsync(vendorDiscount);
+
+        try
+        {
+            var vendorOnly = await _discountService.GetAllDiscountsAsync(showHidden: true, isActive: null, vendorId: 99);
+            vendorOnly.Should().Contain(discount => discount.Id == vendorDiscount.Id);
+            vendorOnly.Should().NotContain(discount => discount.Id == storeDiscount.Id);
+
+            var all = await _discountService.GetAllDiscountsAsync(showHidden: true, isActive: null);
+            all.Should().Contain(discount => discount.Id == vendorDiscount.Id);
+            all.Should().Contain(discount => discount.Id == storeDiscount.Id);
+        }
+        finally
+        {
+            await _discountService.DeleteDiscountAsync(storeDiscount);
+            await _discountService.DeleteDiscountAsync(vendorDiscount);
+        }
+    }
+
+    [Test]
     public async Task ShouldAcceptValidDiscountCode()
     {
         var discount = CreateDiscount();

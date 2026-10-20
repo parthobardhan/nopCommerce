@@ -379,6 +379,11 @@ public partial class ProductController : BaseAdminController
     {
         var allDiscounts = await _discountService.GetAllDiscountsAsync(DiscountType.AssignedToSkus, showHidden: true, isActive: null);
 
+        // vendors may only attach or detach their own SKU discounts
+        var currentVendor = await _workContext.GetCurrentVendorAsync();
+        if (currentVendor != null)
+            allDiscounts = allDiscounts.Where(discount => discount.VendorId == currentVendor.Id).ToList();
+
         foreach (var discount in allDiscounts)
         {
             if (model.SelectedDiscountIds != null && model.SelectedDiscountIds.Contains(discount.Id))
