@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Nop.Core;
 using Nop.Core.Domain.Discounts;
 using Nop.Plugin.DiscountRules.CustomerRoles.Models;
 using Nop.Services.Configuration;
@@ -26,6 +27,7 @@ public class DiscountRulesCustomerRolesController : BasePluginController
     protected readonly ILocalizationService _localizationService;
     protected readonly IPermissionService _permissionService;
     protected readonly ISettingService _settingService;
+    protected readonly IWorkContext _workContext;
 
     #endregion
 
@@ -35,13 +37,15 @@ public class DiscountRulesCustomerRolesController : BasePluginController
         IDiscountService discountService,
         ILocalizationService localizationService,
         IPermissionService permissionService,
-        ISettingService settingService)
+        ISettingService settingService,
+        IWorkContext workContext)
     {
         _customerService = customerService;
         _discountService = discountService;
         _localizationService = localizationService;
         _permissionService = permissionService;
         _settingService = settingService;
+        _workContext = workContext;
     }
 
     #endregion
@@ -58,6 +62,18 @@ public class DiscountRulesCustomerRolesController : BasePluginController
         return ModelState.Values.SelectMany(v => v.Errors.Select(e => e.ErrorMessage));
     }
 
+    protected async Task<bool> HasAccessToDiscountAsync(Discount discount)
+    {
+        if (discount == null)
+            return false;
+
+        var currentVendor = await _workContext.GetCurrentVendorAsync();
+        if (currentVendor == null)
+            return true;
+
+        return discount.VendorId == currentVendor.Id;
+    }
+
     #endregion
 
     #region Methods
@@ -68,10 +84,16 @@ public class DiscountRulesCustomerRolesController : BasePluginController
         //load the discount
         var discount = await _discountService.GetDiscountByIdAsync(discountId)
                        ?? throw new ArgumentException("Discount could not be loaded");
+        if (!await HasAccessToDiscountAsync(discount))
+            throw new ArgumentException("Discount could not be loaded");
 
-        //check whether the discount requirement exists
-        if (discountRequirementId.HasValue && await _discountService.GetDiscountRequirementByIdAsync(discountRequirementId.Value) is null)
-            return Content("Failed to load requirement.");
+        //check whether the discount requirement exists and belongs to this discount
+        if (discountRequirementId.HasValue)
+        {
+            var existingRequirement = await _discountService.GetDiscountRequirementByIdAsync(discountRequirementId.Value);
+            if (existingRequirement == null || existingRequirement.DiscountId != discount.Id)
+                return Content("Failed to load requirement.");
+        }
 
         //try to get previously saved restricted customer role identifier
         var restrictedRoleId = await _settingService.GetSettingByKeyAsync<int>(string.Format(DiscountRequirementDefaults.SettingsKey, discountRequirementId ?? 0));
@@ -109,11 +131,13 @@ public class DiscountRulesCustomerRolesController : BasePluginController
         {
             //load the discount
             var discount = await _discountService.GetDiscountByIdAsync(model.DiscountId);
-            if (discount == null)
+            if (discount == null || !await HasAccessToDiscountAsync(discount))
                 return NotFound(new { Errors = new[] { "Discount could not be loaded" } });
 
             //get the discount requirement
             var discountRequirement = await _discountService.GetDiscountRequirementByIdAsync(model.RequirementId);
+            if (discountRequirement != null && discountRequirement.DiscountId != discount.Id)
+                return NotFound(new { Errors = new[] { "Discount could not be loaded" } });
 
             //the discount requirement does not exist, so create a new one
             if (discountRequirement == null)
