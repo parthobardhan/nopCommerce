@@ -163,4 +163,15 @@ public partial interface IShipmentService
     /// The task result contains the shipment tracker
     /// </returns>
     Task<IShipmentTracker> GetShipmentTrackerAsync(Shipment shipment);
+
+    /// <summary>
+    /// Gets a value indicating whether every item in the shipment belongs to the vendor
+    /// </summary>
+    /// <param name="shipment">Shipment</param>
+    /// <param name="vendorId">Vendor identifier</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains true when the shipment has items and all of them belong to the vendor
+    /// </returns>
+    Task<bool> ShipmentBelongsToVendorAsync(Shipment shipment, int vendorId);
 }
