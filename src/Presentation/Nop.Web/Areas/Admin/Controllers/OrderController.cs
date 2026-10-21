@@ -177,11 +177,13 @@ public partial class OrderController : BaseAdminController
     {
         ArgumentNullException.ThrowIfNull(shipment);
 
-        if (await _workContext.GetCurrentVendorAsync() == null)
+        var currentVendor = await _workContext.GetCurrentVendorAsync();
+        if (currentVendor == null)
             //not a vendor; has access
             return true;
 
-        return await HasAccessToOrderAsync(shipment.OrderId);
+        //order membership is not enough: the shipment must contain only this vendor's products
+        return await _shipmentService.ShipmentBelongsToVendorAsync(shipment, currentVendor.Id);
     }
 
     protected virtual async Task LogEditOrderAsync(int orderId)

@@ -439,5 +439,39 @@ public partial class ShipmentService : IShipmentService
         return shipmentTracker;
     }
 
+    /// <summary>
+    /// Gets a value indicating whether every item in the shipment belongs to the vendor
+    /// </summary>
+    /// <param name="shipment">Shipment</param>
+    /// <param name="vendorId">Vendor identifier</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains true when the shipment has items and all of them belong to the vendor
+    /// </returns>
+    public virtual async Task<bool> ShipmentBelongsToVendorAsync(Shipment shipment, int vendorId)
+    {
+        ArgumentNullException.ThrowIfNull(shipment);
+
+        if (vendorId <= 0)
+            return false;
+
+        var shipmentItems = await GetShipmentItemsByShipmentIdAsync(shipment.Id);
+        if (shipmentItems == null || shipmentItems.Count == 0)
+            return false;
+
+        foreach (var shipmentItem in shipmentItems)
+        {
+            var orderItem = await _orderItemRepository.GetByIdAsync(shipmentItem.OrderItemId);
+            if (orderItem == null)
+                return false;
+
+            var product = await _productRepository.GetByIdAsync(orderItem.ProductId);
+            if (product == null || product.VendorId != vendorId)
+                return false;
+        }
+
+        return true;
+    }
+
     #endregion
 }
