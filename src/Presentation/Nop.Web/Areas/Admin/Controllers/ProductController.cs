@@ -813,6 +813,15 @@ public partial class ProductController : BaseAdminController
         }
     }
 
+    protected virtual async Task<bool> HasAccessToAssociatedProductAsync(Vendor currentVendor, int associatedProductId)
+    {
+        if (currentVendor == null)
+            return true;
+
+        var associatedProduct = await _productService.GetProductByIdAsync(associatedProductId);
+        return associatedProduct != null && associatedProduct.VendorId == currentVendor.Id;
+    }
+
     protected virtual async Task SaveAttributeValuePicturesAsync(Product product, ProductAttributeValue value, ProductAttributeValueModel model)
     {
         var existingValuePictures = await _productAttributeService.GetProductAttributeValuePicturesAsync(value.Id);
@@ -3513,6 +3522,11 @@ public partial class ProductController : BaseAdminController
         if (currentVendor != null && product.VendorId != currentVendor.Id)
             return RedirectToAction("List", "Product");
 
+        //a vendor should have access only to his associated (bundled) products
+        if (model.AttributeValueTypeId == (int)AttributeValueType.AssociatedToProduct &&
+            !await HasAccessToAssociatedProductAsync(currentVendor, model.AssociatedProductId))
+            return RedirectToAction("List", "Product");
+
         if (productAttributeMapping.AttributeControlType == AttributeControlType.ColorSquares)
         {
             //ensure valid color is chosen/entered
@@ -3605,6 +3619,11 @@ public partial class ProductController : BaseAdminController
         //a vendor should have access only to his products
         var currentVendor = await _workContext.GetCurrentVendorAsync();
         if (currentVendor != null && product.VendorId != currentVendor.Id)
+            return RedirectToAction("List", "Product");
+
+        //a vendor should have access only to his associated (bundled) products
+        if (model.AttributeValueTypeId == (int)AttributeValueType.AssociatedToProduct &&
+            !await HasAccessToAssociatedProductAsync(currentVendor, model.AssociatedProductId))
             return RedirectToAction("List", "Product");
 
         if (productAttributeMapping.AttributeControlType == AttributeControlType.ColorSquares)

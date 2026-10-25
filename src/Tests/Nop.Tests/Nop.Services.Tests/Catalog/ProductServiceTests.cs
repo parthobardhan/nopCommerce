@@ -365,5 +365,54 @@ public class ProductServiceTests : ServiceTest
         _productService.GetRentalPeriods(product, new DateTime(2014, 3, 5), new DateTime(2016, 3, 7)).Should().Be(2);
     }
 
+    [Test]
+    public async Task AdjustInventoryShouldDecrementAssociatedProductStock()
+    {
+        var productAttributeService = GetService<IProductAttributeService>();
+        var productAttributeParser = GetService<IProductAttributeParser>();
+
+        var associated = new Product
+        {
+            Name = "Associated stock victim",
+            Published = true,
+            ManageInventoryMethod = ManageInventoryMethod.ManageStock,
+            StockQuantity = 10,
+            UseMultipleWarehouses = false
+        };
+        await _productService.InsertProductAsync(associated);
+
+        var parent = new Product
+        {
+            Name = "Bundle parent",
+            Published = true,
+            ManageInventoryMethod = ManageInventoryMethod.DontManageStock
+        };
+        await _productService.InsertProductAsync(parent);
+
+        var attribute = (await productAttributeService.GetAllProductAttributesAsync()).First();
+        var mapping = new ProductAttributeMapping
+        {
+            ProductId = parent.Id,
+            ProductAttributeId = attribute.Id,
+            AttributeControlType = AttributeControlType.DropdownList
+        };
+        await productAttributeService.InsertProductAttributeMappingAsync(mapping);
+
+        var value = new ProductAttributeValue
+        {
+            ProductAttributeMappingId = mapping.Id,
+            AttributeValueType = AttributeValueType.AssociatedToProduct,
+            AssociatedProductId = associated.Id,
+            Name = "Include associated",
+            Quantity = 2
+        };
+        await productAttributeService.InsertProductAttributeValueAsync(value);
+
+        var attributesXml = productAttributeParser.AddProductAttribute(null, mapping, value.Id.ToString());
+        await _productService.AdjustInventoryAsync(parent, -1, attributesXml);
+
+        (await _productService.GetProductByIdAsync(associated.Id)).StockQuantity.Should().Be(8);
+    }
+
     #endregion
 }
