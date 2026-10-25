@@ -815,6 +815,18 @@ public partial class ImportManager : IImportManager
         var isRequired = productAttributeManager.GetDefaultProperty("AttributeIsRequired").BooleanValue;
         var attributeDisplayOrder = productAttributeManager.GetDefaultProperty("AttributeDisplayOrder").IntValue;
 
+        //vendors cannot attach another vendor's SKU as a bundled component (checkout decrements that stock)
+        if (attributeValueTypeId == (int)AttributeValueType.AssociatedToProduct && associatedProductId > 0)
+        {
+            var currentVendor = await _workContext.GetCurrentVendorAsync();
+            if (currentVendor != null)
+            {
+                var associatedProduct = await _productService.GetProductByIdAsync(associatedProductId);
+                if (associatedProduct == null || associatedProduct.VendorId != currentVendor.Id)
+                    associatedProductId = 0;
+            }
+        }
+
         var productAttributeMapping = (await _productAttributeService.GetProductAttributeMappingsByProductIdAsync(lastLoadedProduct.Id))
             .FirstOrDefault(pam => pam.ProductAttributeId == productAttributeId);
         var pictureIds = new List<int>();
