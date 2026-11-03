@@ -172,16 +172,9 @@ public partial class CustomerRegistrationService : ICustomerRegistrationService
             return CustomerLoginResults.WrongPassword;
         }
 
-        var selectedProvider = await _permissionService.AuthorizeAsync(StandardPermission.Security.ENABLE_MULTI_FACTOR_AUTHENTICATION, customer)
-            ? await _genericAttributeService.GetAttributeAsync<string>(customer, NopCustomerDefaults.SelectedMultiFactorAuthenticationProviderAttribute)
-            : null;
-        var store = await _storeContext.GetCurrentStoreAsync();
-        var methodIsActive = await _multiFactorAuthenticationPluginManager.IsPluginActiveAsync(selectedProvider, customer, store.Id);
-        if (methodIsActive)
-            return CustomerLoginResults.MultiFactorAuthenticationRequired;
-
-        if (!string.IsNullOrEmpty(selectedProvider))
-            _notificationService.WarningNotification(await _localizationService.GetResourceAsync("MultiFactorAuthentication.Notification.SelectedMethodIsNotActive"));
+        var postAuthenticationResult = await GetPostAuthenticationLoginResultAsync(customer);
+        if (postAuthenticationResult != CustomerLoginResults.Successful)
+            return postAuthenticationResult;
 
         //update login details
         customer.FailedLoginAttempts = 0;
@@ -223,6 +216,39 @@ public partial class CustomerRegistrationService : ICustomerRegistrationService
         customer.LastLoginDateUtc = DateTime.UtcNow;
         customer.PhoneSmsVerified = true;
         await _customerService.UpdateCustomerAsync(customer);
+
+        return CustomerLoginResults.Successful;
+    }
+
+    /// <summary>
+    /// Evaluate deleted / active / registered / MFA gates after identity is already proven
+    /// </summary>
+    /// <param name="customer">Customer</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains the result
+    /// </returns>
+    public virtual async Task<CustomerLoginResults> GetPostAuthenticationLoginResultAsync(Customer customer)
+    {
+        ArgumentNullException.ThrowIfNull(customer);
+
+        if (customer.Deleted)
+            return CustomerLoginResults.Deleted;
+        if (!customer.Active)
+            return CustomerLoginResults.NotActive;
+        if (!await _customerService.IsRegisteredAsync(customer))
+            return CustomerLoginResults.NotRegistered;
+
+        var selectedProvider = await _permissionService.AuthorizeAsync(StandardPermission.Security.ENABLE_MULTI_FACTOR_AUTHENTICATION, customer)
+            ? await _genericAttributeService.GetAttributeAsync<string>(customer, NopCustomerDefaults.SelectedMultiFactorAuthenticationProviderAttribute)
+            : null;
+        var store = await _storeContext.GetCurrentStoreAsync();
+        var methodIsActive = await _multiFactorAuthenticationPluginManager.IsPluginActiveAsync(selectedProvider, customer, store.Id);
+        if (methodIsActive)
+            return CustomerLoginResults.MultiFactorAuthenticationRequired;
+
+        if (!string.IsNullOrEmpty(selectedProvider))
+            _notificationService.WarningNotification(await _localizationService.GetResourceAsync("MultiFactorAuthentication.Notification.SelectedMethodIsNotActive"));
 
         return CustomerLoginResults.Successful;
     }
