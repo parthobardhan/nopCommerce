@@ -30,6 +30,17 @@ public partial interface ICustomerRegistrationService
     Task<CustomerLoginResults> ValidateCustomerByPhoneAsync(string phone);
 
     /// <summary>
+    /// Evaluate deleted / active / registered / MFA gates after identity is already proven
+    /// (password, recovery token, etc.). Does not increment failed-login counters.
+    /// </summary>
+    /// <param name="customer">Customer</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains the result
+    /// </returns>
+    Task<CustomerLoginResults> GetPostAuthenticationLoginResultAsync(Customer customer);
+
+    /// <summary>
     /// Register customer
     /// </summary>
     /// <param name="request">Request</param>

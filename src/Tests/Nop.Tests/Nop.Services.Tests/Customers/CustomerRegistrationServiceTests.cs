@@ -125,4 +125,56 @@ public class CustomerRegistrationServiceTests : ServiceTest
 
         await DeleteCustomerAsync(customer);
     }
+
+    [Test]
+    public async Task PostAuthenticationAllowsActiveRegisteredCustomer()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear);
+
+        var result = await _customerRegistrationService.GetPostAuthenticationLoginResultAsync(customer);
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.Successful);
+    }
+
+    [Test]
+    public async Task PostAuthenticationRejectsUnregisteredCustomer()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear, false);
+
+        var result = await _customerRegistrationService.GetPostAuthenticationLoginResultAsync(customer);
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.NotRegistered);
+    }
+
+    [Test]
+    public async Task PostAuthenticationRejectsInactiveCustomer()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear);
+        customer.Active = false;
+        await _customerService.UpdateCustomerAsync(customer);
+
+        var result = await _customerRegistrationService.GetPostAuthenticationLoginResultAsync(customer);
+        await DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.NotActive);
+    }
+
+    [Test]
+    public async Task PostAuthenticationRejectsDeletedCustomer()
+    {
+        var customer = await CreateCustomerAsync(PasswordFormat.Clear);
+        customer.Deleted = true;
+        await _customerService.UpdateCustomerAsync(customer);
+
+        var result = await _customerRegistrationService.GetPostAuthenticationLoginResultAsync(customer);
+
+        customer.Username = customer.Email = string.Empty;
+        customer.Active = false;
+        await _customerService.UpdateCustomerAsync(customer);
+        await _customerService.DeleteCustomerAsync(customer);
+
+        result.Should().Be(CustomerLoginResults.Deleted);
+    }
 }

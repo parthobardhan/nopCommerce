@@ -965,8 +965,32 @@ public partial class CustomerController : BasePublicController
         await _customerActivityService.InsertActivityAsync(customer, "PublicStore.PasswordChanged", await
             _localizationService.GetResourceAsync("ActivityLog.PublicStore.PasswordChanged"));
 
-        //authenticate customer after changing password
-        await _customerRegistrationService.SignInCustomerAsync(customer, null, true);
+        // recovery proved email ownership — clear lockout so the new password can be used
+        customer.FailedLoginAttempts = 0;
+        customer.CannotLoginUntilDateUtc = null;
+        customer.RequireReLogin = false;
+        await _customerService.UpdateCustomerAsync(customer);
+
+        // same deleted / active / registered / MFA gates as password login
+        var loginResult = await _customerRegistrationService.GetPostAuthenticationLoginResultAsync(customer);
+        if (loginResult == CustomerLoginResults.MultiFactorAuthenticationRequired)
+        {
+            var customerMultiFactorAuthenticationInfo = new CustomerMultiFactorAuthenticationInfo
+            {
+                UserName = _customerSettings.UsernamesEnabled ? customer.Username : customer.Email,
+                RememberMe = true,
+                ReturnUrl = model.ReturnUrl
+            };
+            await HttpContext.Session.SetAsync(
+                NopCustomerDefaults.CustomerMultiFactorAuthenticationInfo,
+                customerMultiFactorAuthenticationInfo);
+            _notificationService.SuccessNotification(
+                await _localizationService.GetResourceAsync("Account.PasswordRecovery.PasswordHasBeenChanged"));
+            return RedirectToRoute(NopRouteNames.Standard.MULTIFACTOR_VERIFICATION);
+        }
+
+        if (loginResult == CustomerLoginResults.Successful)
+            await _customerRegistrationService.SignInCustomerAsync(customer, null, true);
 
         model.DisablePasswordChanging = true;
         model.Result = await _localizationService.GetResourceAsync("Account.PasswordRecovery.PasswordHasBeenChanged");
