@@ -1,5 +1,4 @@
-﻿using System.Text.RegularExpressions;
-using Markdig;
+﻿using Markdig;
 using Nop.Core;
 using Nop.Core.Caching;
 using Nop.Core.Domain.Customers;
@@ -99,54 +98,6 @@ public class ForumService
     #region Utilities
 
     /// <summary>
-    /// Ensure only allowed HTML tags
-    /// </summary>
-    /// <param name="text">Text</param>
-    /// <returns>Sanitized text with all invalid tags removed</returns>
-    private static string EnsureOnlyAllowedHtml(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return string.Empty;
-
-        const string allowedTags = "br,hr,b,i,u,a,div,ol,ul,li,blockquote,img,span,p,em,strong,font,pre,h1,h2,h3,h4,h5,h6,address,cite,code";
-
-        var m = Regex.Matches(text, "<.*?>", RegexOptions.IgnoreCase);
-
-        for (var i = m.Count - 1; i >= 0; i--)
-        {
-            var tag = text[(m[i].Index + 1)..(m[i].Index + m[i].Length)].Trim().ToLower();
-
-            if (!isValidTag(tag))
-                text = text.Remove(m[i].Index, m[i].Length);
-        }
-
-        return text;
-
-        static bool isValidTag(string tag)
-        {
-            var aTags = allowedTags.Split(',');
-            if (tag.Contains("javascript", StringComparison.InvariantCultureIgnoreCase))
-                return false;
-
-            if (tag.Contains("vbscript", StringComparison.InvariantCultureIgnoreCase))
-                return false;
-
-            if (tag.Contains("onclick", StringComparison.InvariantCultureIgnoreCase))
-                return false;
-
-            var endChars = new[] { ' ', '>', '/', '\t' };
-
-            var pos = tag.IndexOfAny(endChars, 1);
-            if (pos > 0)
-                tag = tag[0..pos];
-            if (tag[0] == '/')
-                tag = tag[1..^0];
-
-            return aTags.Any(aTag => tag == aTag);
-        }
-    }
-
-    /// <summary>
     /// Formats the text
     /// </summary>
     /// <param name="text">Text</param>
@@ -164,7 +115,7 @@ public class ForumService
             formatedText = textFormatType switch
             {
                 TextFormatType.BBCode => _bbCodeHelper.FormatText(_htmlFormatter.FormatText(text)),
-                TextFormatType.Markdown => EnsureOnlyAllowedHtml(Markdown.ToHtml(CSharpFormat.FormatTextSimple(text))),
+                TextFormatType.Markdown => HtmlSanitizer.EnsureOnlyAllowedHtml(Markdown.ToHtml(CSharpFormat.FormatTextSimple(text))),
                 _ => _htmlFormatter.FormatText(text)
             };
         }
