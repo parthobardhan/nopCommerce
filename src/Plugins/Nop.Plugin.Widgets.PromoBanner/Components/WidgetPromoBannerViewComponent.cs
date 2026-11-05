@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
+using Nop.Core.Domain.Catalog;
+using Nop.Core.Http;
 using Nop.Plugin.Widgets.PromoBanner.Models;
 using Nop.Services.Localization;
 using Nop.Web.Framework.Components;
+using Nop.Web.Framework.Mvc.Routing;
 
 namespace Nop.Plugin.Widgets.PromoBanner.Components;
 
@@ -10,11 +13,17 @@ namespace Nop.Plugin.Widgets.PromoBanner.Components;
 /// </summary>
 public class WidgetPromoBannerViewComponent : NopViewComponent
 {
+    private readonly CatalogSettings _catalogSettings;
     private readonly ILocalizationService _localizationService;
+    private readonly INopUrlHelper _nopUrlHelper;
 
-    public WidgetPromoBannerViewComponent(ILocalizationService localizationService)
+    public WidgetPromoBannerViewComponent(CatalogSettings catalogSettings,
+        ILocalizationService localizationService,
+        INopUrlHelper nopUrlHelper)
     {
+        _catalogSettings = catalogSettings;
         _localizationService = localizationService;
+        _nopUrlHelper = nopUrlHelper;
     }
 
     /// <summary>
@@ -29,7 +38,10 @@ public class WidgetPromoBannerViewComponent : NopViewComponent
             Headline = await _localizationService.GetResourceAsync("Plugins.Widgets.PromoBanner.Headline"),
             Text = await _localizationService.GetResourceAsync("Plugins.Widgets.PromoBanner.Text"),
             ButtonText = await _localizationService.GetResourceAsync("Plugins.Widgets.PromoBanner.ButtonText"),
-            LinkUrl = PromoBannerDefaults.LinkUrl
+            ShowButton = _catalogSettings.NewProductsEnabled,
+            LinkUrl = _catalogSettings.NewProductsEnabled
+                ? _nopUrlHelper.RouteUrl(NopRouteNames.General.NEW_PRODUCTS)
+                : null
         };
 
         return await ViewAsync("~/Plugins/Widgets.PromoBanner/Views/PublicInfo.cshtml", model);

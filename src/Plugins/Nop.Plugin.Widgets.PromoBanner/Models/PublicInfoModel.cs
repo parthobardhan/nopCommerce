@@ -11,5 +11,7 @@ public class PublicInfoModel
 
     public string ButtonText { get; set; }
 
+    public bool ShowButton { get; set; }
+
     public string LinkUrl { get; set; }
 }
