@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Presentation\Nop.Web\Nop.Web.csproj" />
+    <ProjectReference Include="..\..\Plugins\Nop.Plugin.Misc.Forums\Nop.Plugin.Misc.Forums.csproj" />
   </ItemGroup>
 
   <ItemGroup>
