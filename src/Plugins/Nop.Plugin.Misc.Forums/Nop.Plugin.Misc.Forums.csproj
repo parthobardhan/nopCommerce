@@ -383,6 +383,10 @@
     <PackageReference Include="Humanizer" Version="3.0.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Nop.Tests" />
+  </ItemGroup>
+
   <!-- This target execute after "Build" target -->
   <Target Name="NopTarget" AfterTargets="Build">
     <!-- Delete unnecessary libraries from plugins path -->
