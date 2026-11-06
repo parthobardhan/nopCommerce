@@ -166,7 +166,11 @@
                 dataType: 'json',
                 success: function(result) {
                     if (result.success) {
-                        window.location.href = '@Model.ReturnUrl';
+                        if (result.requireMultiFactor && result.redirectUrl) {
+                            window.location.href = result.redirectUrl;
+                        } else {
+                            window.location.href = '@Model.ReturnUrl';
+                        }
                     } else {
                         notification(result.message || "@T("PhoneVerification.OtpCode.Error.Verification")", 'error');
                         otpInput.val("").prop("disabled", false).focus();

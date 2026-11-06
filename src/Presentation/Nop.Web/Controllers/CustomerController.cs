@@ -88,6 +88,7 @@ public partial class CustomerController : BasePublicController
     protected readonly IStateProvinceService _stateProvinceService;
     protected readonly IStoreContext _storeContext;
     protected readonly ITaxService _taxService;
+    protected readonly IWebHelper _webHelper;
     protected readonly IWorkContext _workContext;
     protected readonly IWorkflowMessageService _workflowMessageService;
     protected readonly LocalizationSettings _localizationSettings;
@@ -141,6 +142,7 @@ public partial class CustomerController : BasePublicController
         IStateProvinceService stateProvinceService,
         IStoreContext storeContext,
         ITaxService taxService,
+        IWebHelper webHelper,
         IWorkContext workContext,
         IWorkflowMessageService workflowMessageService,
         LocalizationSettings localizationSettings,
@@ -189,6 +191,7 @@ public partial class CustomerController : BasePublicController
         _stateProvinceService = stateProvinceService;
         _storeContext = storeContext;
         _taxService = taxService;
+        _webHelper = webHelper;
         _workContext = workContext;
         _workflowMessageService = workflowMessageService;
         _localizationSettings = localizationSettings;
@@ -690,6 +693,30 @@ public partial class CustomerController : BasePublicController
                     {
                         await _authenticationService.SignInAsync(customer, false);
                         break;
+                    }
+                case CustomerLoginResults.MultiFactorAuthenticationRequired:
+                    {
+                        var userNameOrEmail = _customerSettings.UsernamesEnabled ? customer.Username : customer.Email;
+                        if (string.IsNullOrEmpty(userNameOrEmail))
+                            return Json(new { success = false, message = await _localizationService.GetResourceAsync("PhoneVerification.OtpCode.Error.Verification") });
+
+                        var requestedReturn = Request.Query["returnUrl"].FirstOrDefault();
+                        string returnUrlAfterMfa = null;
+                        if (!string.IsNullOrEmpty(requestedReturn) && _webHelper.CheckIsLocalUrl(requestedReturn))
+                            returnUrlAfterMfa = requestedReturn;
+
+                        var customerMultiFactorAuthenticationInfo = new CustomerMultiFactorAuthenticationInfo
+                        {
+                            UserName = userNameOrEmail,
+                            RememberMe = false,
+                            ReturnUrl = returnUrlAfterMfa
+                        };
+                        await HttpContext.Session.SetAsync(
+                            NopCustomerDefaults.CustomerMultiFactorAuthenticationInfo,
+                            customerMultiFactorAuthenticationInfo);
+
+                        var multiFactorUrl = Url.RouteUrl(NopRouteNames.Standard.MULTIFACTOR_VERIFICATION);
+                        return Json(new { success = true, requireMultiFactor = true, redirectUrl = multiFactorUrl });
                     }
                 case CustomerLoginResults.CustomerNotExist:
                 case CustomerLoginResults.NotRegistered:
