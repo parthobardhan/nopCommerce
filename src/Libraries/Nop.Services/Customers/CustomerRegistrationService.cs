@@ -225,7 +225,11 @@ public partial class CustomerRegistrationService : ICustomerRegistrationService
         var store = await _storeContext.GetCurrentStoreAsync();
         var methodIsActive = await _multiFactorAuthenticationPluginManager.IsPluginActiveAsync(selectedProvider, customer, store.Id);
         if (methodIsActive)
+        {
+            // One-time OTP consumed; do not sign in until MFA completes
+            await _genericAttributeService.SaveAttributeAsync(customer, NopCustomerDefaults.OtpContextAttribute, (string)null);
             return CustomerLoginResults.MultiFactorAuthenticationRequired;
+        }
 
         if (!string.IsNullOrEmpty(selectedProvider))
             _notificationService.WarningNotification(await _localizationService.GetResourceAsync("MultiFactorAuthentication.Notification.SelectedMethodIsNotActive"));
