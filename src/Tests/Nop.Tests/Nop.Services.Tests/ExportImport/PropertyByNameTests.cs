@@ -95,4 +95,27 @@ public class PropertyByNameTests
         missing.DecimalValue.Should().Be(default);
         missing.DecimalValueNullable.Should().BeNull();
     }
+
+    [Test]
+    public void BlankExportedGiftCardOverrideStaysNull()
+    {
+        // export writes a blank cell when OverriddenGiftCardAmount is null.
+        // ImportManager must use DecimalValueNullable: DecimalValue would store 0
+        // and AddGiftCardsAsync would then issue a $0 card.
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Products");
+        worksheet.Cell(1, 1).Value = "OverriddenGiftCardAmount";
+
+        var blank = CreateProperty(worksheet.Row(2).Cell(1).Value);
+        blank.DecimalValue.Should().Be(0m);
+        blank.DecimalValueNullable.Should().BeNull();
+
+        worksheet.Cell(3, 1).Value = 0m;
+        var explicitZero = CreateProperty(worksheet.Row(3).Cell(1).Value);
+        explicitZero.DecimalValueNullable.Should().Be(0m);
+
+        worksheet.Cell(4, 1).Value = 25.5m;
+        var amount = CreateProperty(worksheet.Row(4).Cell(1).Value);
+        amount.DecimalValueNullable.Should().Be(25.5m);
+    }
 }

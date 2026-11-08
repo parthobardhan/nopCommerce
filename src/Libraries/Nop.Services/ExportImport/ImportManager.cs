@@ -2378,7 +2378,9 @@ public partial class ImportManager : IImportManager
                         product.GiftCardTypeId = property.IntValue;
                         break;
                     case "OverriddenGiftCardAmount":
-                        product.OverriddenGiftCardAmount = property.DecimalValue;
+                        // blank cells must stay null so checkout uses the product price;
+                        // DecimalValue would turn them into $0 gift cards
+                        product.OverriddenGiftCardAmount = property.DecimalValueNullable;
                         break;
                     case "RequireOtherProducts":
                         product.RequireOtherProducts = property.BooleanValue;
