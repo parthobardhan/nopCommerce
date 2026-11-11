@@ -1,5 +1,4 @@
-﻿using System.Globalization;
-using System.Text;
+﻿using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using Nop.Core;
@@ -874,7 +873,9 @@ public partial class ProductController : BaseAdminController
             {
                 setData(productId, data =>
                 {
-                    data.Price = decimal.Parse(item.Value, NumberStyles.Any, CultureInfo.InvariantCulture);
+                    if (!CommonHelper.TryParsePostedDecimal(item.Value, out var price))
+                        throw new FormatException($"Invalid product price '{item.Value}'.");
+                    data.Price = price;
                 });
             }
 
@@ -882,7 +883,9 @@ public partial class ProductController : BaseAdminController
             {
                 setData(productId, data =>
                 {
-                    data.OldPrice = decimal.Parse(item.Value, NumberStyles.Any, CultureInfo.InvariantCulture);
+                    if (!CommonHelper.TryParsePostedDecimal(item.Value, out var oldPrice))
+                        throw new FormatException($"Invalid product old price '{item.Value}'.");
+                    data.OldPrice = oldPrice;
                 });
             }
 
