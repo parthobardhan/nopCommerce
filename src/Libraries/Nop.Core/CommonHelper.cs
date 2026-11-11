@@ -302,6 +302,31 @@ public partial class CommonHelper
     }
 
     /// <summary>
+    /// Parses a decimal posted from an admin text box.
+    /// Invariant <see cref="NumberStyles.Any"/> treats ',' as a thousands separator, so a de-DE
+    /// value of "12,50" becomes 1250. Try invariant without thousands first, then the current culture.
+    /// </summary>
+    /// <param name="value">Posted string</param>
+    /// <param name="result">Parsed value</param>
+    /// <returns>true when <paramref name="value"/> is a decimal</returns>
+    public static bool TryParsePostedDecimal(string value, out decimal result)
+    {
+        const NumberStyles decimalWithoutThousands =
+            NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite |
+            NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint;
+        const NumberStyles decimalWithThousands = decimalWithoutThousands | NumberStyles.AllowThousands;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            result = default;
+            return false;
+        }
+
+        return decimal.TryParse(value, decimalWithoutThousands, CultureInfo.InvariantCulture, out result)
+            || decimal.TryParse(value, decimalWithThousands, CultureInfo.CurrentCulture, out result);
+    }
+
+    /// <summary>
     /// Get DateTime to the specified year, month, and day using the conventions of the current thread culture
     /// </summary>
     /// <param name="year">The year</param>
