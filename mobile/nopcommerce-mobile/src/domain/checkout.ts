@@ -1,4 +1,4 @@
-import type { AddressModelDto } from '../api/types';
+import type { AddressModelDto, CheckoutRedirectResponse } from '../api/types';
 
 export type CheckoutStep = 'address' | 'shipping' | 'payment' | 'confirm' | 'complete';
 
@@ -34,20 +34,26 @@ export function previousStep(step: CheckoutStep, requiresShipping: boolean): Che
 
 export type AddressField = keyof Pick<
   AddressModelDto,
-  'first_name' | 'last_name' | 'email' | 'country_id' | 'city' | 'address1' | 'zip_postal_code' | 'phone_number'
+  'first_name' | 'last_name' | 'email' | 'country_id' | 'state_province_id' | 'city' | 'address1' | 'zip_postal_code' | 'phone_number'
 >;
 
 export type AddressErrors = Partial<Record<AddressField, string>>;
 
+export interface AddressValidationOptions {
+  /** True when the selected country has states/provinces (US, Canada, …). */
+  requireState?: boolean;
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-export function validateAddress(address: AddressModelDto): AddressErrors {
+export function validateAddress(address: AddressModelDto, options: AddressValidationOptions = {}): AddressErrors {
   const errors: AddressErrors = {};
   if (!text(address.first_name)) errors.first_name = 'First name is required';
   if (!text(address.last_name)) errors.last_name = 'Last name is required';
   if (!text(address.email)) errors.email = 'Email is required';
   else if (!EMAIL_RE.test(address.email!.trim())) errors.email = 'Enter a valid email';
   if (!address.country_id || address.country_id <= 0) errors.country_id = 'Select a country';
+  else if (options.requireState && !(address.state_province_id && address.state_province_id > 0)) errors.state_province_id = 'Select a state or province';
   if (!text(address.city)) errors.city = 'City is required';
   if (!text(address.address1)) errors.address1 = 'Street address is required';
   if (!text(address.zip_postal_code)) errors.zip_postal_code = 'Postal code is required';
@@ -64,8 +70,23 @@ export function isPlausiblePhone(value: string): boolean {
   return digits >= 6 && digits <= 15;
 }
 
-export function isAddressValid(address: AddressModelDto): boolean {
-  return Object.keys(validateAddress(address)).length === 0;
+export function isAddressValid(address: AddressModelDto, options: AddressValidationOptions = {}): boolean {
+  return Object.keys(validateAddress(address, options)).length === 0;
+}
+
+/**
+ * Payment plugins that complete without a hosted payment page or card form.
+ * Anything else (PayPal, card processors) would need a redirect the app does not handle.
+ */
+export const OFFLINE_PAYMENT_METHODS: readonly string[] = ['Payments.CheckMoneyOrder', 'Payments.CashOnDelivery'];
+
+export function isOfflinePaymentMethod(systemName: string | null | undefined): boolean {
+  return Boolean(systemName) && OFFLINE_PAYMENT_METHODS.includes(systemName!);
+}
+
+/** The app has no separate ship-to form, so a store that asks for one must stop checkout. */
+export function needsShippingAddressStep(result: CheckoutRedirectResponse): boolean {
+  return result.redirect_to_method === 'ShippingAddress' || result.goto_section === 'shipping';
 }
 
 export function emptyAddress(): AddressModelDto {
@@ -89,7 +110,7 @@ export function formatAddress(address: AddressModelDto): string {
     [address.first_name, address.last_name].filter(Boolean).join(' '),
     address.address1,
     address.address2,
-    [address.city, address.zip_postal_code].filter(Boolean).join(' '),
+    [address.city, address.state_province_name, address.zip_postal_code].filter(Boolean).join(' '),
     address.country_name,
   ];
   return lines.filter((l) => l && l.trim()).join('\n');

@@ -1,5 +1,5 @@
 import { ApiError } from '../errors';
-import type { CategoryQuery, StoreApi, TokenStorage } from '../storeApi';
+import { toStoredSession, type CategoryQuery, type StoreApi, type StoredSession, type TokenStorage } from '../storeApi';
 import type {
   AddProductToCartResponse,
   AddressModelDto,
@@ -20,6 +20,7 @@ import type {
   RegisterRequest,
   RegisterResponse,
   SearchModelDto,
+  SelectListItemDto,
   ShoppingCartItemModelDto,
   ShoppingCartModelDto,
   TokenResponse,
@@ -33,6 +34,7 @@ import {
   DEMO_PAYMENT_METHODS,
   DEMO_PRODUCT_SEEDS,
   DEMO_SHIPPING_METHODS,
+  DEMO_STATES,
   slugify,
   toCategory,
   toDetails,
@@ -86,11 +88,15 @@ export class DemoStoreApi implements StoreApi {
 
   // ---- auth -------------------------------------------------------------
 
+  async restoreSession(): Promise<StoredSession> {
+    return (await this.tokenStorage.get()) ?? toStoredSession(await this.getGuestToken());
+  }
+
   async getGuestToken(): Promise<TokenResponse> {
     await this.delay();
     this.state.customer = null;
     const token = this.token(0, null);
-    await this.tokenStorage.set(token.token);
+    await this.tokenStorage.set(toStoredSession(token));
     return token;
   }
 
@@ -101,7 +107,7 @@ export class DemoStoreApi implements StoreApi {
     if (!match) throw new ApiError('validation', 'Login was unsuccessful. Please correct the errors and try again.', { status: 400, details: ['The credentials provided are incorrect'] });
     this.state.customer = match;
     const token = this.token(1 + this.state.registered.indexOf(match), match.email);
-    await this.tokenStorage.set(token.token);
+    await this.tokenStorage.set(toStoredSession(token));
     return token;
   }
 
@@ -120,7 +126,7 @@ export class DemoStoreApi implements StoreApi {
     this.state.registered.push(customer);
     this.state.customer = customer;
     const token = this.token(this.state.registered.length, email);
-    await this.tokenStorage.set(token.token);
+    await this.tokenStorage.set(toStoredSession(token));
     return { success: true, token };
   }
 
@@ -268,12 +274,19 @@ export class DemoStoreApi implements StoreApi {
     };
   }
 
+  async getStatesByCountry(countryId: number): Promise<SelectListItemDto[]> {
+    await this.delay();
+    return DEMO_STATES[String(countryId)] ?? [];
+  }
+
   async saveBillingAddress(address: AddressModelDto, _shipToSameAddress: boolean): Promise<CheckoutRedirectResponse> {
     await this.delay();
     this.requireCart();
-    if (!isAddressValid(address)) return { wrong_billing_address: true, errors: ['Please fill in all required address fields'] };
+    const states = DEMO_STATES[String(address.country_id)] ?? [];
+    if (!isAddressValid(address, { requireState: states.length > 0 })) return { wrong_billing_address: true, errors: ['Please fill in all required address fields'] };
     const country = DEMO_COUNTRIES.find((c) => Number(c.value) === address.country_id);
-    this.state.billing = { ...address, country_name: country?.text ?? null, available_countries: undefined };
+    const state = states.find((s) => Number(s.value) === address.state_province_id);
+    this.state.billing = { ...address, country_name: country?.text ?? null, state_province_id: state ? address.state_province_id : null, state_province_name: state?.text ?? null, available_countries: undefined };
     return { redirect_to_method: 'ShippingMethod', goto_section: 'shipping_method' };
   }
 

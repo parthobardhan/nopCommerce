@@ -13,6 +13,7 @@ export const queryKeys = {
   cart: ['cart'] as const,
   cartTotals: ['cart', 'totals'] as const,
   billing: ['checkout', 'billing'] as const,
+  states: (countryId: number) => ['checkout', 'states', countryId] as const,
   shipping: ['checkout', 'shipping'] as const,
   payment: ['checkout', 'payment'] as const,
   confirm: ['checkout', 'confirm'] as const,
@@ -106,6 +107,12 @@ export function useRemoveCartItem() {
 export function useBillingAddress(enabled: boolean) {
   const api = useStoreApi();
   return useQuery({ queryKey: queryKeys.billing, queryFn: () => api.getBillingAddress(), enabled });
+}
+
+export function useStates(countryId: number | null | undefined) {
+  const api = useStoreApi();
+  const id = countryId ?? 0;
+  return useQuery({ queryKey: queryKeys.states(id), queryFn: () => api.getStatesByCountry(id), enabled: id > 0, staleTime: Infinity });
 }
 
 export function useSaveBilling() {

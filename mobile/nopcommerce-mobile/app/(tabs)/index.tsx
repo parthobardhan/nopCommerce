@@ -4,13 +4,15 @@ import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View
 import { resolveImageSource } from '../../src/api/demo/demoAssets';
 import type { CategoryModelDto } from '../../src/api/types';
 import { useHomepageCategories, useHomepageProducts } from '../../src/hooks/queries';
+import { useSettings } from '../../src/state/settings';
 import { DemoBanner } from '../../src/ui/components/DemoBanner';
 import { ProductCard } from '../../src/ui/components/ProductCard';
 import { ErrorState, Loading, Screen } from '../../src/ui/components/Screen';
 import { colors, radius, spacing, typography } from '../../src/ui/theme';
 
 function CategoryTile({ category }: { category: CategoryModelDto }) {
-  const source = resolveImageSource(category.picture_model?.image_url);
+  const baseUrl = useSettings((s) => s.baseUrl);
+  const source = resolveImageSource(category.picture_model?.image_url, baseUrl);
   return (
     <Link href={{ pathname: '/category/[id]', params: { id: String(category.id) } }} asChild>
       <Pressable style={styles.tile} accessibilityRole="button" testID={`category-tile-${category.id}`}>

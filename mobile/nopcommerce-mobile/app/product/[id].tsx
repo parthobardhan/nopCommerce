@@ -7,6 +7,7 @@ import { describeError } from '../../src/api/errors';
 import { clampQuantity } from '../../src/domain/cart';
 import { parseRouteId, stripHtml } from '../../src/domain/text';
 import { useAddToCart, useProduct } from '../../src/hooks/queries';
+import { useSettings } from '../../src/state/settings';
 import { Button } from '../../src/ui/components/Button';
 import { DemoBanner } from '../../src/ui/components/DemoBanner';
 import { QuantityStepper } from '../../src/ui/components/QuantityStepper';
@@ -19,6 +20,7 @@ export default function ProductScreen() {
   const product = useProduct(id);
   const addToCart = useAddToCart();
   const { width } = useWindowDimensions();
+  const baseUrl = useSettings((s) => s.baseUrl);
   // null until the shopper edits it; otherwise the store's suggested quantity is used.
   const [chosenQuantity, setQuantity] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -53,7 +55,7 @@ export default function ProductScreen() {
       <ScrollView contentContainerStyle={styles.content} testID="product-scroll">
         <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={{ width }}>
           {pictures.map((picture, index) => {
-            const source = resolveImageSource(picture.image_url);
+            const source = resolveImageSource(picture.image_url, baseUrl);
             return (
               <View key={`${picture.image_url}-${index}`} style={[styles.hero, { width }]}>
                 {source ? <Image source={source} style={styles.heroImage} contentFit="contain" transition={200} accessibilityLabel={picture.alternate_text ?? p.name} /> : null}

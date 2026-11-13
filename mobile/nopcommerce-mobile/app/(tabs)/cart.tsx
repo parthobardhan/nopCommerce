@@ -5,6 +5,7 @@ import { resolveImageSource } from '../../src/api/demo/demoAssets';
 import { describeError } from '../../src/api/errors';
 import type { ShoppingCartItemModelDto } from '../../src/api/types';
 import { useCart, useCartTotals, useRemoveCartItem, useUpdateCartItem } from '../../src/hooks/queries';
+import { useSettings } from '../../src/state/settings';
 import { Button } from '../../src/ui/components/Button';
 import { DemoBanner } from '../../src/ui/components/DemoBanner';
 import { QuantityStepper } from '../../src/ui/components/QuantityStepper';
@@ -15,7 +16,8 @@ function CartLine({ item }: { item: ShoppingCartItemModelDto }) {
   const update = useUpdateCartItem();
   const remove = useRemoveCartItem();
   const busy = update.isPending || remove.isPending;
-  const source = resolveImageSource(item.picture?.image_url);
+  const baseUrl = useSettings((s) => s.baseUrl);
+  const source = resolveImageSource(item.picture?.image_url, baseUrl);
   return (
     <View style={styles.line} testID={`cart-line-${item.id}`}>
       <Link href={{ pathname: '/product/[id]', params: { id: String(item.product_id) } }} asChild>

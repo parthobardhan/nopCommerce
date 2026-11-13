@@ -3,10 +3,12 @@ import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { resolveImageSource } from '../../api/demo/demoAssets';
 import type { ProductOverviewModelDto } from '../../api/types';
+import { useSettings } from '../../state/settings';
 import { colors, radius, spacing, typography } from '../theme';
 
 export function ProductCard({ product }: { product: ProductOverviewModelDto }) {
-  const source = resolveImageSource(product.picture_models[0]?.image_url);
+  const baseUrl = useSettings((s) => s.baseUrl);
+  const source = resolveImageSource(product.picture_models[0]?.image_url, baseUrl);
   return (
     <Link href={{ pathname: '/product/[id]', params: { id: String(product.id) } }} asChild>
       <Pressable style={styles.card} accessibilityRole="button" testID={`product-card-${product.id}`}>

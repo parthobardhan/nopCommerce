@@ -309,6 +309,19 @@ export const DEMO_COUNTRIES: SelectListItemDto[] = [
   { text: 'Australia', value: '5' },
 ];
 
+/** States keyed by DEMO_COUNTRIES value; countries without an entry have no states. */
+export const DEMO_STATES: Record<string, SelectListItemDto[]> = {
+  '1': [
+    { text: 'California', value: '40' },
+    { text: 'New York', value: '41' },
+    { text: 'Texas', value: '42' },
+  ],
+  '2': [
+    { text: 'Ontario', value: '60' },
+    { text: 'Quebec', value: '61' },
+  ],
+};
+
 export const DEMO_SHIPPING_METHODS: ShippingMethodDto[] = [
   { name: 'Ground', description: 'Shipping by land transport', fee: formatMoney(0), shipping_rate_computation_method_system_name: 'Shipping.FixedByWeightByTotal', selected: true },
   { name: 'Next Day Air', description: 'The one day air shipping', fee: formatMoney(0), shipping_rate_computation_method_system_name: 'Shipping.FixedByWeightByTotal', selected: false },

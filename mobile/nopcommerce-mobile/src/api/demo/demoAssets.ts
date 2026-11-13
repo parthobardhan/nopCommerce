@@ -26,14 +26,19 @@ const DEMO_ASSETS: Record<string, number> = {
 
 /**
  * Turns a picture URL from the API into an `expo-image` source. Demo fixtures
- * use `demo-asset://<name>` so they render offline; anything else is a URI.
+ * use `demo-asset://<name>` so they render offline. nopCommerce often returns
+ * root-relative (`/images/thumbs/…`) or protocol-relative (`//cdn…`) URLs; those
+ * are resolved against the store `baseUrl`.
  */
-export function resolveImageSource(url: string | null | undefined): ImageSource | number | null {
+export function resolveImageSource(url: string | null | undefined, baseUrl?: string | null): ImageSource | number | null {
   if (!url) return null;
   if (url.startsWith(DEMO_ASSET_SCHEME)) {
     const key = url.slice(DEMO_ASSET_SCHEME.length);
     return DEMO_ASSETS[key] ?? null;
   }
   if (/^https?:\/\//i.test(url)) return { uri: url };
+  const base = baseUrl?.match(/^(https?:)\/\/[^/?#]+/i);
+  if (url.startsWith('//')) return { uri: `${base?.[1] ?? 'https:'}${url}` };
+  if (url.startsWith('/') && base) return { uri: `${base[0]}${url}` };
   return null;
 }

@@ -1,5 +1,6 @@
+import { isOfflinePaymentMethod } from '../domain/checkout';
 import { ApiError } from './errors';
-import { SHOPPING_CART_TYPE_ID, type CategoryQuery, type StoreApi, type TokenStorage } from './storeApi';
+import { SHOPPING_CART_TYPE_ID, toStoredSession, type CategoryQuery, type StoreApi, type StoredSession, type TokenStorage } from './storeApi';
 import type {
   AddProductToCartResponse,
   AddressModelDto,
@@ -21,6 +22,7 @@ import type {
   RegisterRequest,
   RegisterResponse,
   SearchModelDto,
+  SelectListItemDto,
   ShoppingCartModelDto,
   TokenRequest,
   TokenResponse,
@@ -44,6 +46,8 @@ export interface HttpStoreApiOptions {
   tokenStorage: TokenStorage;
   fetchFn?: typeof fetch;
   timeoutMs?: number;
+  /** Called when the store rejects a customer token and the client falls back to a guest session. */
+  onSessionExpired?: (guest: StoredSession) => void;
 }
 
 /** Joins a store base URL and an API path without duplicate or missing slashes. */
@@ -86,26 +90,35 @@ export class HttpStoreApi implements StoreApi {
   private readonly tokenStorage: TokenStorage;
   private readonly fetchFn: typeof fetch;
   private readonly timeoutMs: number;
-  private tokenPromise: Promise<string> | null = null;
+  private readonly onSessionExpired?: (guest: StoredSession) => void;
+  private bootstrapPromise: Promise<StoredSession> | null = null;
+  /** Bumped on every explicit sign-in/out so an in-flight guest bootstrap cannot overwrite it. */
+  private authEpoch = 0;
+  private latestSession: StoredSession | null = null;
 
   constructor(options: HttpStoreApiOptions) {
     this.baseUrl = options.baseUrl;
     this.tokenStorage = options.tokenStorage;
     this.fetchFn = options.fetchFn ?? fetch;
     this.timeoutMs = options.timeoutMs ?? 20_000;
+    this.onSessionExpired = options.onSessionExpired;
   }
 
   // ---- auth -------------------------------------------------------------
 
+  async restoreSession(): Promise<StoredSession> {
+    return (await this.tokenStorage.get()) ?? this.bootstrapGuest();
+  }
+
   async getGuestToken(): Promise<TokenResponse> {
     const token = await this.requestToken({ guest: true });
-    await this.tokenStorage.set(token.token);
+    await this.storeSession(token);
     return token;
   }
 
   async login(username: string, password: string, rememberMe: boolean): Promise<TokenResponse> {
     const token = await this.requestToken({ guest: false, username, password, remember_me: rememberMe });
-    await this.tokenStorage.set(token.token);
+    await this.storeSession(token);
     return token;
   }
 
@@ -113,7 +126,7 @@ export class HttpStoreApi implements StoreApi {
     const body = await this.request('POST', '/Customer/Register', { body: request });
     if (!isRecord(body)) return { success: true };
     const response = body as unknown as RegisterResponse;
-    if (response.token?.token) await this.tokenStorage.set(response.token.token);
+    if (response.token?.token) await this.storeSession(response.token);
     return { success: response.success ?? !(response.errors?.length), errors: response.errors ?? null, token: response.token ?? null };
   }
 
@@ -192,6 +205,15 @@ export class HttpStoreApi implements StoreApi {
     return this.request('GET', '/Checkout/BillingAddress') as Promise<CheckoutBillingAddressModelDto>;
   }
 
+  async getStatesByCountry(countryId: number): Promise<SelectListItemDto[]> {
+    const body = await this.request('GET', `/Country/GetStatesByCountryId/${countryId}`, { query: { addSelectStateItem: 'false' } });
+    if (!Array.isArray(body)) throw new ApiError('malformed_response', 'States response is not a list');
+    // nopCommerce answers a single id 0 "Other" entry for countries without states.
+    return body
+      .filter((s): s is { id: number; name: string } => isRecord(s) && typeof s.id === 'number' && s.id > 0 && typeof s.name === 'string')
+      .map((s) => ({ text: s.name, value: String(s.id) }));
+  }
+
   saveBillingAddress(address: AddressModelDto, shipToSameAddress: boolean): Promise<CheckoutRedirectResponse> {
     const form = addressToForm('BillingNewAddress', address);
     form.ShipToSameAddress = shipToSameAddress ? 'true' : 'false';
@@ -206,11 +228,13 @@ export class HttpStoreApi implements StoreApi {
     return this.request('POST', '/Checkout/SaveShippingMethod', { body: { shippingoption: option } }) as Promise<CheckoutRedirectResponse>;
   }
 
-  getPaymentMethods(): Promise<CheckoutPaymentMethodModelDto> {
-    return this.request('GET', '/Checkout/PaymentMethod') as Promise<CheckoutPaymentMethodModelDto>;
+  async getPaymentMethods(): Promise<CheckoutPaymentMethodModelDto> {
+    const model = (await this.request('GET', '/Checkout/PaymentMethod')) as CheckoutPaymentMethodModelDto;
+    return { ...model, payment_methods: (model?.payment_methods ?? []).filter((m) => isOfflinePaymentMethod(m.payment_method_system_name)) };
   }
 
-  savePaymentMethod(systemName: string): Promise<CheckoutRedirectResponse> {
+  async savePaymentMethod(systemName: string): Promise<CheckoutRedirectResponse> {
+    if (!isOfflinePaymentMethod(systemName)) return { errors: ['This payment method is not supported in the app'] };
     return this.request('POST', '/Checkout/SavePaymentMethod', { body: { paymentmethod: systemName } }) as Promise<CheckoutRedirectResponse>;
   }
 
@@ -239,17 +263,31 @@ export class HttpStoreApi implements StoreApi {
     return assertToken(body);
   }
 
+  private async storeSession(token: TokenResponse): Promise<void> {
+    this.authEpoch += 1;
+    this.latestSession = toStoredSession(token);
+    await this.tokenStorage.set(this.latestSession);
+  }
+
+  /** Mints a guest token unless a sign-in/out lands while the request is in flight. */
+  private bootstrapGuest(): Promise<StoredSession> {
+    if (!this.bootstrapPromise) {
+      const epoch = this.authEpoch;
+      this.bootstrapPromise = (async () => {
+        const token = await this.requestToken({ guest: true });
+        if (this.authEpoch !== epoch && this.latestSession) return this.latestSession;
+        await this.storeSession(token);
+        return toStoredSession(token);
+      })().finally(() => {
+        this.bootstrapPromise = null;
+      });
+    }
+    return this.bootstrapPromise;
+  }
+
   private async ensureToken(): Promise<string> {
     const stored = await this.tokenStorage.get();
-    if (stored) return stored;
-    if (!this.tokenPromise) {
-      this.tokenPromise = this.getGuestToken()
-        .then((t) => t.token)
-        .finally(() => {
-          this.tokenPromise = null;
-        });
-    }
-    return this.tokenPromise;
+    return stored ? stored.token : (await this.bootstrapGuest()).token;
   }
 
   private async request(
@@ -260,7 +298,8 @@ export class HttpStoreApi implements StoreApi {
     const { body, query, auth = true, retry = true } = options;
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    if (auth) headers.Authorization = `Bearer ${await this.ensureToken()}`;
+    const sentToken = auth ? await this.ensureToken() : null;
+    if (sentToken) headers.Authorization = `Bearer ${sentToken}`;
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), this.timeoutMs) : null;
@@ -280,9 +319,17 @@ export class HttpStoreApi implements StoreApi {
     }
 
     const parsed = await parseBody(response);
-    if (response.status === 401 && auth && retry) {
-      // Token expired or was revoked: drop it, mint a guest token, retry once.
-      await this.tokenStorage.set(null);
+    if (response.status === 401 && sentToken && retry) {
+      // Token expired or was revoked: drop it (unless a concurrent call already
+      // replaced it), fall back to a guest token and retry once.
+      const current = await this.tokenStorage.get();
+      if (current?.token === sentToken) {
+        await this.tokenStorage.set(null);
+        if (current.username) {
+          const guest = await this.bootstrapGuest();
+          if (!guest.username) this.onSessionExpired?.(guest);
+        }
+      }
       return this.request(method, path, { ...options, retry: false });
     }
     if (!response.ok) throw ApiError.fromStatus(response.status, parsed);

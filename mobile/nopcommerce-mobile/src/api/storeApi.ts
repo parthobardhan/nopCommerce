@@ -16,6 +16,7 @@ import type {
   ProductDetailsModelDto,
   ProductOverviewModelDto,
   SearchModelDto,
+  SelectListItemDto,
   ShoppingCartModelDto,
   TokenResponse,
   RegisterRequest,
@@ -36,6 +37,8 @@ export interface StoreApi {
   readonly mode: 'live' | 'demo';
 
   // auth
+  /** Resumes the stored session (guest or customer); mints a guest token only when none is stored. */
+  restoreSession(): Promise<StoredSession>;
   getGuestToken(): Promise<TokenResponse>;
   login(username: string, password: string, rememberMe: boolean): Promise<TokenResponse>;
   register(request: RegisterRequest): Promise<RegisterResponse>;
@@ -58,6 +61,8 @@ export interface StoreApi {
 
   // checkout
   getBillingAddress(): Promise<CheckoutBillingAddressModelDto>;
+  /** States/provinces for a country; empty when the country has none. */
+  getStatesByCountry(countryId: number): Promise<SelectListItemDto[]>;
   saveBillingAddress(address: AddressModelDto, shipToSameAddress: boolean): Promise<CheckoutRedirectResponse>;
   getShippingMethods(): Promise<CheckoutShippingMethodModelDto>;
   saveShippingMethod(option: string): Promise<CheckoutRedirectResponse>;
@@ -71,10 +76,21 @@ export interface StoreApi {
   getOrderDetails(orderId: number): Promise<OrderDetailsModelDto>;
 }
 
+/** A bearer token plus who it belongs to; `username === null` means guest. */
+export interface StoredSession {
+  token: string;
+  customer_id: number;
+  username: string | null;
+}
+
 /** Persists the bearer token between launches. */
 export interface TokenStorage {
-  get(): Promise<string | null>;
-  set(token: string | null): Promise<void>;
+  get(): Promise<StoredSession | null>;
+  set(session: StoredSession | null): Promise<void>;
+}
+
+export function toStoredSession(token: TokenResponse): StoredSession {
+  return { token: token.token, customer_id: token.customer_id, username: token.username ?? null };
 }
 
 export const SHOPPING_CART_TYPE_ID = 1;

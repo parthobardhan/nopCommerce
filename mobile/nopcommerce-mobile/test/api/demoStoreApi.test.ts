@@ -8,6 +8,7 @@ const ADDRESS: AddressModelDto = {
   last_name: 'Shopper',
   email: 'demo@nopcommerce.local',
   country_id: 1,
+  state_province_id: 41,
   city: 'New York',
   address1: '21 West 52nd Street',
   zip_postal_code: '10021',
@@ -78,8 +79,22 @@ describe('DemoStoreApi', () => {
     await expect(api.getBillingAddress()).rejects.toMatchObject({ kind: 'validation' });
     await api.addToCart(4, 1);
     expect(await api.saveBillingAddress({ ...ADDRESS, email: 'nope' }, true)).toMatchObject({ wrong_billing_address: true });
+    expect(await api.saveBillingAddress({ ...ADDRESS, state_province_id: null }, true)).toMatchObject({ wrong_billing_address: true });
     expect(await api.saveShippingMethod('Teleport___Nope')).toMatchObject({ errors: [expect.stringMatching(/shipping method/i)] });
     expect(await api.confirmOrder()).toMatchObject({ errors: expect.arrayContaining([expect.stringMatching(/Billing address/)]) });
+    expect(await api.saveBillingAddress({ ...ADDRESS, country_id: 3, state_province_id: null }, true)).toMatchObject({ redirect_to_method: 'ShippingMethod' });
+  });
+
+  it('lists states only for countries that have them', async () => {
+    const api = createApi();
+    expect((await api.getStatesByCountry(1)).map((s) => s.text)).toContain('New York');
+    expect(await api.getStatesByCountry(3)).toEqual([]);
+  });
+
+  it('restores the stored session instead of replacing it with a guest', async () => {
+    const api = createApi();
+    const token = await api.login(DEMO_CUSTOMER.email, DEMO_CUSTOMER.password, true);
+    expect(await api.restoreSession()).toMatchObject({ token: token.token, username: DEMO_CUSTOMER.email });
   });
 
   it('enforces stock limits', async () => {

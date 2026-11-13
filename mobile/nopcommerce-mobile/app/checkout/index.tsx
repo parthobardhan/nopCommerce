@@ -1,9 +1,18 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { describeError } from '../../src/api/errors';
 import type { AddressModelDto, SelectListItemDto } from '../../src/api/types';
-import { emptyAddress, formatAddress, nextStep, previousStep, validateAddress, type AddressErrors, type CheckoutStep } from '../../src/domain/checkout';
+import {
+  emptyAddress,
+  formatAddress,
+  needsShippingAddressStep,
+  nextStep,
+  previousStep,
+  validateAddress,
+  type AddressErrors,
+  type CheckoutStep,
+} from '../../src/domain/checkout';
 import {
   useBillingAddress,
   useCart,
@@ -14,6 +23,7 @@ import {
   useSavePayment,
   useSaveShipping,
   useShippingMethods,
+  useStates,
 } from '../../src/hooks/queries';
 import { Button } from '../../src/ui/components/Button';
 import { DemoBanner } from '../../src/ui/components/DemoBanner';
@@ -34,7 +44,6 @@ export default function CheckoutScreen() {
   const requiresShipping = totals.data?.requires_shipping ?? true;
   const [step, setStep] = useState<CheckoutStep>('address');
   const [address, setAddress] = useState<AddressModelDto | null>(null);
-  const [shipToSame, setShipToSame] = useState(true);
   const [shippingOption, setShippingOption] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<{ systemName: string; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +70,7 @@ export default function CheckoutScreen() {
           </Text>
         ) : null}
         {step === 'address' ? (
-          <AddressStep address={address} onChange={setAddress} shipToSame={shipToSame} onShipToSame={setShipToSame} onError={setError} onDone={() => go(nextStep('address', requiresShipping))} />
+          <AddressStep address={address} onChange={setAddress} onError={setError} onDone={() => go(nextStep('address', requiresShipping))} />
         ) : null}
         {step === 'shipping' ? (
           <ShippingStep selected={shippingOption} onSelect={setShippingOption} onError={setError} onBack={() => go(previousStep('shipping', requiresShipping))} onDone={() => go('payment')} />
@@ -105,13 +114,13 @@ function StepHeader({ current, requiresShipping }: { current: CheckoutStep; requ
 interface AddressStepProps {
   address: AddressModelDto | null;
   onChange: (a: AddressModelDto) => void;
-  shipToSame: boolean;
-  onShipToSame: (v: boolean) => void;
   onError: (message: string | null) => void;
   onDone: () => void;
 }
 
-function AddressStep({ address, onChange, shipToSame, onShipToSame, onError, onDone }: AddressStepProps) {
+const SEPARATE_SHIPPING_UNSUPPORTED = 'This store needs a separate shipping address, which the app does not support yet. Please finish this order on the store website.';
+
+function AddressStep({ address, onChange, onError, onDone }: AddressStepProps) {
   const billing = useBillingAddress(true);
   const save = useSaveBilling();
   const [errors, setErrors] = useState<AddressErrors>({});
@@ -122,6 +131,9 @@ function AddressStep({ address, onChange, shipToSame, onShipToSame, onError, onD
     [address, billing.data],
   );
   const countries: SelectListItemDto[] = useMemo(() => billing.data?.billing_new_address.available_countries ?? [], [billing.data]);
+  const states = useStates(form.country_id);
+  const stateOptions = states.data ?? [];
+  const validationOptions = { requireState: stateOptions.length > 0 };
 
   if (billing.isPending) return <Loading label="Preparing checkout…" />;
   if (billing.isError) return <ErrorState error={billing.error} onRetry={billing.refetch} />;
@@ -129,19 +141,23 @@ function AddressStep({ address, onChange, shipToSame, onShipToSame, onError, onD
   const set = (patch: Partial<AddressModelDto>) => {
     const next = { ...form, ...patch };
     onChange(next);
-    if (Object.keys(errors).length) setErrors(validateAddress(next));
+    if (Object.keys(errors).length) setErrors(validateAddress(next, validationOptions));
   };
 
   const submit = () => {
-    const validation = validateAddress(form);
+    if (states.isError) return onError(describeError(states.error));
+    const validation = validateAddress(form, validationOptions);
     setErrors(validation);
     if (Object.keys(validation).length) return;
-    onChange(form);
+    const state = stateOptions.find((s) => Number(s.value) === form.state_province_id);
+    const toSave: AddressModelDto = { ...form, state_province_id: state ? form.state_province_id : null, state_province_name: state?.text ?? null };
+    onChange(toSave);
     save.mutate(
-      { address: form, shipToSame },
+      { address: toSave, shipToSame: true },
       {
         onSuccess: (result) => {
           if (result.wrong_billing_address || result.errors?.length) onError(result.errors?.join('\n') ?? 'The store rejected this address');
+          else if (needsShippingAddressStep(result)) onError(SEPARATE_SHIPPING_UNSUPPORTED);
           else onDone();
         },
         onError: (e) => onError(describeError(e)),
@@ -166,13 +182,33 @@ function AddressStep({ address, onChange, shipToSame, onShipToSame, onError, onD
         {countries.map((c) => {
           const selected = String(form.country_id ?? '') === c.value;
           return (
-            <Pressable key={c.value} onPress={() => set({ country_id: Number(c.value) })} style={[styles.chip, selected && styles.chipSelected]} accessibilityRole="radio" accessibilityState={{ selected }} testID={`country-${c.value}`}>
+            <Pressable key={c.value} onPress={() => !selected && set({ country_id: Number(c.value), state_province_id: null, state_province_name: null })} style={[styles.chip, selected && styles.chipSelected]} accessibilityRole="radio" accessibilityState={{ selected }} testID={`country-${c.value}`}>
               <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{c.text}</Text>
             </Pressable>
           );
         })}
       </View>
       {errors.country_id ? <Text style={styles.fieldError}>{errors.country_id}</Text> : null}
+      {stateOptions.length ? (
+        <>
+          <Text style={styles.fieldLabel}>State / province</Text>
+          <View style={styles.chips}>
+            {stateOptions.map((s) => {
+              const selected = String(form.state_province_id ?? '') === s.value;
+              return (
+                <Pressable key={s.value} onPress={() => set({ state_province_id: Number(s.value), state_province_name: s.text })} style={[styles.chip, selected && styles.chipSelected]} accessibilityRole="radio" accessibilityState={{ selected }} testID={`state-${s.value}`}>
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{s.text}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
+      {errors.state_province_id ? (
+        <Text style={styles.fieldError} testID="addr-state-error">
+          {errors.state_province_id}
+        </Text>
+      ) : null}
       <Field label="Street address" value={form.address1 ?? ''} onChangeText={(v) => set({ address1: v })} error={errors.address1} autoComplete="street-address" testID="addr-address1" />
       <Field label="Apartment, suite (optional)" value={form.address2 ?? ''} onChangeText={(v) => set({ address2: v })} testID="addr-address2" />
       <View style={styles.twoCol}>
@@ -184,13 +220,8 @@ function AddressStep({ address, onChange, shipToSame, onShipToSame, onError, onD
         </View>
       </View>
       <Field label="Phone" value={form.phone_number ?? ''} onChangeText={(v) => set({ phone_number: v })} error={errors.phone_number} keyboardType="phone-pad" autoComplete="tel" testID="addr-phone" />
-      {billing.data.ship_to_same_address_allowed ? (
-        <View style={styles.switchRow}>
-          <Text style={typography.body}>Ship to this address</Text>
-          <Switch value={shipToSame} onValueChange={onShipToSame} trackColor={{ true: colors.primary }} />
-        </View>
-      ) : null}
-      <Button title="Continue to shipping" onPress={submit} loading={save.isPending} style={styles.cta} testID="address-continue" />
+      <Text style={typography.caption}>Your order ships to this address.</Text>
+      <Button title="Continue to shipping" onPress={submit} loading={save.isPending || states.isFetching} style={styles.cta} testID="address-continue" />
     </View>
   );
 }
@@ -317,6 +348,8 @@ function ConfirmStep({ address, shippingOption, paymentMethodName, totals, items
       onSuccess: (result) => {
         if (result.completed) {
           router.replace({ pathname: '/checkout/complete', params: { orderId: String(result.completed.order_id), orderNumber: result.completed.custom_order_number } });
+        } else if (result.redirect_to_method && !result.errors?.length) {
+          onError('This order needs a payment step the app does not support. Choose an offline payment method or finish on the store website.');
         } else {
           onError(result.errors?.join('\n') ?? 'The store could not place the order');
         }
@@ -389,7 +422,6 @@ const styles = StyleSheet.create({
   chipSelected: { borderColor: colors.primaryDark, backgroundColor: '#e3f3fd' },
   chipText: { ...typography.body },
   chipTextSelected: { color: colors.primaryDark, fontWeight: '700' },
-  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm },
   cta: { marginTop: spacing.sm },
   option: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md },
   optionSelected: { borderColor: colors.primaryDark, backgroundColor: '#e3f3fd' },

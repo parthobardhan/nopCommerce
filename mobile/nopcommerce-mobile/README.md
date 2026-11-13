@@ -38,7 +38,10 @@ EXPO_PUBLIC_DEMO_MODE=false
 
 or open **Account → Store settings**, turn off *Demo mode*, enter the store root URL and press *Test connection*.
 The client appends `/api-frontend`, requests a guest JWT from `Authenticate/GetToken` and sends it as a bearer
-token. Tokens are stored with `expo-secure-store`.
+token. Tokens (with the customer they belong to) are stored with `expo-secure-store` on iOS/Android and kept in
+memory for the page session on web. On launch the stored session is resumed; a guest token is minted only when
+none is stored. If the store rejects a signed-in customer's token, the app falls back to a guest session and
+shows the shopper as signed out.
 
 Only `http(s)` origins are accepted; Android cleartext is enabled so a local store such as `http://10.0.2.2:5000`
 works from the emulator.
@@ -69,7 +72,7 @@ test/                     Jest suites
 | Search | `GET Catalog/Search?q=` |
 | Product | `GET Product/GetProductDetails/{id}` |
 | Cart | `POST ShoppingCart/AddProductToCartFromCatalog/{id}/1/{qty}`, `GET ShoppingCart/Cart`, `GET ShoppingCart/CartTotal`, `POST ShoppingCart/UpdateCart` |
-| Checkout | `Checkout/BillingAddress` + `SaveBilling`, `ShippingMethod` + `SaveShippingMethod`, `PaymentMethod` + `SavePaymentMethod`, `Confirm` + `ConfirmOrder` |
+| Checkout | `Checkout/BillingAddress` + `SaveBilling`, `Country/GetStatesByCountryId/{id}`, `ShippingMethod` + `SaveShippingMethod`, `PaymentMethod` + `SavePaymentMethod`, `Confirm` + `ConfirmOrder` |
 | Account | `GET Customer/Info`, `POST Customer/Register` |
 | Orders | `GET Order/CustomerOrders`, `GET Order/Details/{id}` |
 
@@ -78,7 +81,10 @@ mismatch surfaces as a readable "Unexpected response from store API" error inste
 
 ## Limitations
 
-- Payment: only offline payment methods exposed by the store are offered (no card entry, no processor secrets).
+- Payment: only offline payment methods (`Payments.CheckMoneyOrder`, `Payments.CashOnDelivery`) are offered;
+  redirecting processors such as PayPal or card gateways are hidden (no card entry, no processor secrets).
+- Orders ship to the billing address. A store that requires a separate shipping address step stops checkout
+  with a message to finish on the website.
 - Product attributes/variants, wishlist, reviews, multi-currency and multi-language are not implemented.
 - The public demo store (`demo.nopcommerce.com`) sits behind a Cloudflare challenge that blocks non-browser
   clients; use your own store with the Web API plugin for live mode.
