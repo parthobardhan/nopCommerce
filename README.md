@@ -1,4 +1,4 @@
-﻿﻿nopCommerce: free and open-source eCommerce solution
+﻿nopCommerce: free and open-source eCommerce solution
 ===========
 
 [nopCommerce](https://www.nopcommerce.com/?utm_source=github&utm_medium=content&utm_campaign=homepage) is the best open-source eCommerce platform. nopCommerce is free, and it is the most popular ASP.NET Core shopping cart.
@@ -78,3 +78,7 @@ Create a new graphical theme or develop a new plugin or integration and sell it 
 ### Contribute ###
 
 As a free and open-source project, we are very grateful to everyone who helps us to develop nopCommerce. Please find more details about the options and bonuses for contributors at [contribute page](https://www.nopcommerce.com/contribute?utm_source=github&utm_medium=referral&utm_campaign=contribute&utm_content=text).
+
+## AI Agent Test
+
+This change came from a Jira to Coding Agent delegation test (PSS-5).
