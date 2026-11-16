@@ -114,13 +114,15 @@ public class CustomerRegistrationServiceTests : ServiceTest
     {
         var customer = await CreateCustomerAsync(PasswordFormat.Clear);
         customer.Phone = "+15550001001";
-        customer.PhoneSmsVerified = true;
+        customer.PhoneSmsVerified = false;
         await _customerService.UpdateCustomerAsync(customer);
 
         var result = await _customerRegistrationService.ValidateCustomerByPhoneAsync(customer.Phone);
+        var updated = await _customerService.GetCustomerByIdAsync(customer.Id);
         await DeleteCustomerAsync(customer);
 
         result.Should().Be(CustomerLoginResults.Successful);
+        updated.PhoneSmsVerified.Should().BeTrue();
     }
 
     [Test]

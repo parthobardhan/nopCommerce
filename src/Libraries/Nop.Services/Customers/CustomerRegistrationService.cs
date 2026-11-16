@@ -228,6 +228,8 @@ public partial class CustomerRegistrationService : ICustomerRegistrationService
         {
             // OTP is consumed; caller must continue through the MFA challenge
             await _genericAttributeService.SaveAttributeAsync(customer, NopCustomerDefaults.OtpContextAttribute, (string)null);
+            customer.PhoneSmsVerified = true;
+            await _customerService.UpdateCustomerAsync(customer);
             return CustomerLoginResults.MultiFactorAuthenticationRequired;
         }
 
