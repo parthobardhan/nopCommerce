@@ -152,11 +152,12 @@
 
             otpInput.prop("disabled", true);
 
+            const returnUrl = '@Html.Raw(JavaScriptEncoder.Default.Encode(Model.ReturnUrl ?? string.Empty))';
             var postData = {
                 phone: phone,
                 otpCode: otpCode,
                 operationType: @((int)Model.VerificationFlow),
-                returnUrl: '@Model.ReturnUrl'
+                returnUrl: returnUrl
             };
             addAntiForgeryToken(postData);
 
@@ -167,7 +168,7 @@
                 dataType: 'json',
                 success: function(result) {
                     if (result.success) {
-                        window.location.href = result.redirectUrl || '@Model.ReturnUrl';
+                        window.location.href = result.redirectUrl || returnUrl;
                     } else {
                         notification(result.message || "@T("PhoneVerification.OtpCode.Error.Verification")", 'error');
                         otpInput.val("").prop("disabled", false).focus();
