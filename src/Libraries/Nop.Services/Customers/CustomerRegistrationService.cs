@@ -215,11 +215,32 @@ public partial class CustomerRegistrationService : ICustomerRegistrationService
         //only registered can login
         if (!await _customerService.IsRegisteredAsync(customer))
             return CustomerLoginResults.NotRegistered;
+        //check whether a customer is locked out
+        if (customer.CannotLoginUntilDateUtc.HasValue && customer.CannotLoginUntilDateUtc.Value > DateTime.UtcNow)
+            return CustomerLoginResults.LockedOut;
+
+        var selectedProvider = await _permissionService.AuthorizeAsync(StandardPermission.Security.ENABLE_MULTI_FACTOR_AUTHENTICATION, customer)
+            ? await _genericAttributeService.GetAttributeAsync<string>(customer, NopCustomerDefaults.SelectedMultiFactorAuthenticationProviderAttribute)
+            : null;
+        var store = await _storeContext.GetCurrentStoreAsync();
+        var methodIsActive = await _multiFactorAuthenticationPluginManager.IsPluginActiveAsync(selectedProvider, customer, store.Id);
+        if (methodIsActive)
+        {
+            // OTP is consumed; caller must continue through the MFA challenge
+            await _genericAttributeService.SaveAttributeAsync(customer, NopCustomerDefaults.OtpContextAttribute, (string)null);
+            return CustomerLoginResults.MultiFactorAuthenticationRequired;
+        }
+
+        if (!string.IsNullOrEmpty(selectedProvider))
+            _notificationService.WarningNotification(await _localizationService.GetResourceAsync("MultiFactorAuthentication.Notification.SelectedMethodIsNotActive"));
 
         // Clear OTP context after successful verification
         await _genericAttributeService.SaveAttributeAsync(customer, NopCustomerDefaults.OtpContextAttribute, (string)null);
 
         //update login details
+        customer.FailedLoginAttempts = 0;
+        customer.CannotLoginUntilDateUtc = null;
+        customer.RequireReLogin = false;
         customer.LastLoginDateUtc = DateTime.UtcNow;
         customer.PhoneSmsVerified = true;
         await _customerService.UpdateCustomerAsync(customer);
