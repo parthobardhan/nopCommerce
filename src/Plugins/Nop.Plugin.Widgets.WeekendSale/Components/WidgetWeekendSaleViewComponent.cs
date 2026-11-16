@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Nop.Core.Domain.Orders;
 using Nop.Plugin.Widgets.WeekendSale.Models;
 using Nop.Web.Framework.Components;
+using Nop.Web.Models.Checkout;
 
 namespace Nop.Plugin.Widgets.WeekendSale.Components;
 
@@ -35,6 +35,22 @@ public class WidgetWeekendSaleViewComponent : NopViewComponent
         return now.DayOfWeek >= DayOfWeek.Friday && now.DayOfWeek <= DayOfWeek.Sunday;
     }
 
+    /// <summary>
+    /// Completed.cshtml passes CheckoutCompletedModel, not Order.
+    /// </summary>
+    internal static bool TryGetCustomOrderNumber(object additionalData, out string customOrderNumber)
+    {
+        var completed = additionalData as CheckoutCompletedModel;
+        if (completed is null)
+        {
+            customOrderNumber = null;
+            return false;
+        }
+
+        customOrderNumber = completed.CustomOrderNumber;
+        return true;
+    }
+
     #endregion
 
     #region Methods
@@ -44,8 +60,8 @@ public class WidgetWeekendSaleViewComponent : NopViewComponent
     /// </summary>
     public async Task<IViewComponentResult> InvokeAsync(string widgetZone, object additionalData)
     {
-        var order = additionalData as Order;
-        var orderNumber = order.CustomOrderNumber;
+        if (!TryGetCustomOrderNumber(additionalData, out var orderNumber))
+            return Content(string.Empty);
 
         if (!IsWeekendSaleActive(DateTime.Now))
             return Content(string.Empty);
