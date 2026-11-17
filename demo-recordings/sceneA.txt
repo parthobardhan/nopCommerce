@@ -1,0 +1,69 @@
+[32m$ [0mpytest -q
+.FF                                                                                                    [100%]
+================================================== FAILURES ==================================================
+_______________________________________________ test_subtract ________________________________________________
+
+    def test_subtract():
+>       assert subtract(5, 3) == 2
+E       assert 8 == 2
+E        +  where 8 = subtract(5, 3)
+
+test_calc.py:10: AssertionError
+____________________________________________ test_divide_by_zero _____________________________________________
+
+    def test_divide_by_zero():
+        with pytest.raises(ValueError, match="zero"):
+>           divide(1, 0)
+
+test_calc.py:15: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+a = 1, b = 0
+
+    def divide(a, b):
+>       return a / b  # bug: no zero check
+               ^^^^^
+E       ZeroDivisionError: division by zero
+
+calc.py:10: ZeroDivisionError
+========================================== short test summary info ===========================================
+FAILED test_calc.py::test_subtract - assert 8 == 2
+FAILED test_calc.py::test_divide_by_zero - ZeroDivisionError: division by zero
+2 failed, 1 passed in 0.01s
+[32m$ [0magent -p 'Fix the failing tests in calc.py' --force --output-format text
+[33m⚠ Warning: The provided API key is invalid.[0m
+The API key was loaded from the CURSOR_API_KEY environment variable.
+Please check you have the right key, create a new one, or authenticate without it.
+[?25h[32m$ [0mgit diff --stat
+[32m$ [0mpytest -q
+.FF                                                                                                    [100%]
+================================================== FAILURES ==================================================
+_______________________________________________ test_subtract ________________________________________________
+
+    def test_subtract():
+>       assert subtract(5, 3) == 2
+E       assert 8 == 2
+E        +  where 8 = subtract(5, 3)
+
+test_calc.py:10: AssertionError
+____________________________________________ test_divide_by_zero _____________________________________________
+
+    def test_divide_by_zero():
+        with pytest.raises(ValueError, match="zero"):
+>           divide(1, 0)
+
+test_calc.py:15: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+a = 1, b = 0
+
+    def divide(a, b):
+>       return a / b  # bug: no zero check
+               ^^^^^
+E       ZeroDivisionError: division by zero
+
+calc.py:10: ZeroDivisionError
+========================================== short test summary info ===========================================
+FAILED test_calc.py::test_subtract - assert 8 == 2
+FAILED test_calc.py::test_divide_by_zero - ZeroDivisionError: division by zero
+2 failed, 1 passed in 0.02s

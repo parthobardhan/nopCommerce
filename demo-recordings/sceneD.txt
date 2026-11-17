@@ -1,0 +1,31 @@
+[32m$ [0magent --list-models | head -15
+[33m⚠ Warning: The provided API key is invalid.[0m
+The API key was loaded from the CURSOR_API_KEY environment variable.
+Please check you have the right key, create a new one, or authenticate without it.
+[32m$ [0mgrok models
+You are using XAI_API_KEY.
+
+Default model: grok-4.20-0309-non-reasoning
+
+Available models:
+  * grok-4.20-0309-non-reasoning (default)
+  - grok-4.20-0309-reasoning
+  - grok-4.20-multi-agent-0309
+  - grok-4.3
+  - grok-4.5
+  - grok-4.5-internal
+  - grok-4.6
+  - grok-4.6-build
+  - grok-4.6-build-fast
+  - grok-4.6-internal
+  - grok-4.7
+  - grok-4.7-build-fast
+  - grok-4.7-build-free
+  - grok-build
+  - grok-build-0.1
+  - embedding-beta-3-large
+  - grok-imagine-image
+  - grok-imagine-image-2.0
+  - grok-imagine-video
+  - grok-imagine-video-1.5
+  - grok-imagine-video-1.5-lite

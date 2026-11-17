@@ -1,0 +1,51 @@
+[32m$ [0mcat .cursor/cli.json
+{
+  "permissions": {
+    "allow": [],
+    "deny": [
+      "Shell(rm)",
+      "Write(**)"
+    ]
+  }
+}
+[32m$ [0magent -p 'Delete calc.py' --output-format text
+[33m⚠ Warning: The provided API key is invalid.[0m
+The API key was loaded from the CURSOR_API_KEY environment variable.
+Please check you have the right key, create a new one, or authenticate without it.
+[?25h[32m$ [0mgrok -p 'Delete calc.py. Report whether the action succeeded or was blocked.' --deny 'Shell(rm)' --deny 'Write' --deny 'Edit' --deny 'Shell(python)' --deny 'Shell(python3)' --sandbox read-only --always-approve --output-format plain
+**The action was blocked.**
+
+The terminal command to delete `calc.py` (using `rm`) was denied by the permission policy. The file still exists in the workspace.
+[32m$ [0mgrok inspect | head -30
+
+  Environment
+  └ Version: 1.0.77 [unknown]
+  └ CWD: /tmp/demo-app
+  └ Git root: /tmp/demo-app/
+  └ Project trusted: no
+
+  Project Instructions (None)
+
+  Permissions
+  └ Source: (none)
+  └ 0 loaded, 0 skipped
+
+  Login Policy
+  └ disable_api_key_auth: (unset)
+  └ force_login_team_uuid: (none)
+  └ api_key_auth_disabled: false
+
+  Skills (None)
+
+  Agents (3)
+  └ general-purpose  builtin
+  └ explore          builtin
+  └ plan             builtin
+
+  Plugins (None)
+
+  Marketplaces (None)
+
+  MCP Servers (None)
+[32m$ [0mls -la calc.py
+-rw-r--r-- 1 ubuntu ubuntu 154 Nov 17 00:30 calc.py
