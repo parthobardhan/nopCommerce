@@ -15,20 +15,11 @@ SCENES = [
      "and it lands first on the path. If a customer pilots both, tell their platform team early, "
      "or developers will think they're testing one product while they're using the other."),
     ("04_task",
-     "Now the same job in both. Here's a small repo with failing tests. I ask the Cursor CLI to fix them. "
-     "It edits the file, and the tests pass. Same prompt in Grok Build, same result. "
-     "The takeaway: the developer workflow is nearly identical. Plan mode, sessions, work trees, and agents dot m d all work the same way, "
-     "so switching cost is low and adoption is fast."),
+     "Now a real task. Here's a small repo with failing tests. The Cursor CLI takes one instruction with the dash p flag, plus plan mode, model choice, and work trees. Here I give Grok Build that same one-line instruction. It reads the code, fixes the subtract and divide bugs, and the tests pass. I've shortened the wait for time. The takeaway: the developer workflow is nearly identical, so switching cost is low and adoption is fast."),
     ("05_ci",
-     "Both also run headless. One flag turns the agent into a CI step that returns structured JSON, "
-     "which is perfect for automated code review on every pull request. That's your expansion story: from a developer seat to every pipeline. "
-     "And here's model choice. Cursor offers multiple vendors, including Anthropic, OpenAI, Google, Grok, and Composer. "
-     "Grok Build is Grok-first today, with custom endpoints by config."),
+     "Both also run headless. One flag turns the agent into a CI step that returns structured JSON, here with the review, the token usage, and the cost of the run. That's perfect for automated code review on every pull request, and it's your expansion story: from a developer seat to every pipeline. On models, Cursor offers multiple vendors, including Anthropic, OpenAI, Google, Grok, and Composer. Grok Build is Grok-first, with custom endpoints by config."),
     ("06_guardrails",
-     "Security reviewers will ask: can it go rogue? Here I deny deletes in Cursor's permission file, and the agent is blocked. "
-     "Grok Build does the same with deny rules and sandbox profiles, and grok inspect shows the login policy an admin can lock down. "
-     "For the buyer, Cursor centralizes control in its dashboard, with S S O, SCIM, and Privacy Mode. "
-     "Grok Build uses a fail-closed policy file pushed by M D M, zero data retention, and its source code is public for review."),
+     "Security reviewers will ask: can it go rogue? Cursor uses allow and deny rules in a permission file, and deny always wins. Grok Build adds sandbox profiles. Here, Grok is told to delete a file, with deny rules and a read-only sandbox, and it's blocked. One lesson from testing: a deny rule for r m alone wasn't enough. The agent found another way to delete the file. So pair deny rules with a sandbox. For the buyer, Cursor centralizes control in its dashboard, with S S O, SCIM, and Privacy Mode. Grok Build uses a fail-closed policy file pushed by M D M, and its source code is public for review."),
     ("07_integrations",
      "On integrations, both speak MCP, so customers reuse the tools they've already connected. "
      "Both read agents dot m d and rules files, and both embed in IDEs over the Agent Client Protocol. "
@@ -54,12 +45,17 @@ SCENES = [
 VOICE = "perseus"
 
 if __name__ == "__main__":
-    import json, os, subprocess, urllib.request
+    import json, os, subprocess, sys, urllib.request
     outdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "audio")
     os.makedirs(outdir, exist_ok=True)
     key = os.environ["XAI_API_KEY"]
     durations = {}
+    only = set(sys.argv[1:])
+    if os.path.exists(os.path.join(outdir, "durations.json")):
+        durations = json.load(open(os.path.join(outdir, "durations.json")))
     for name, text in SCENES:
+        if only and name not in only:
+            continue
         body = json.dumps({"text": text, "voice_id": VOICE, "language": "en", "speed": 1.05}).encode()
         req = urllib.request.Request("https://api.x.ai/v1/tts", data=body, method="POST",
                                      headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
