@@ -1,0 +1,43 @@
+[32m$ [0mcd /tmp/demo-app
+[32m$ [0mpytest -q
+.FF                                                                                                    [100%]
+================================================== FAILURES ==================================================
+_______________________________________________ test_subtract ________________________________________________
+
+    def test_subtract():
+>       assert subtract(5, 3) == 2
+E       assert 8 == 2
+E        +  where 8 = subtract(5, 3)
+
+test_calc.py:10: AssertionError
+____________________________________________ test_divide_by_zero _____________________________________________
+
+    def test_divide_by_zero():
+        with pytest.raises(ValueError, match="zero"):
+>           divide(1, 0)
+
+test_calc.py:15: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+a = 1, b = 0
+
+    def divide(a, b):
+>       return a / b
+               ^^^^^
+E       ZeroDivisionError: division by zero
+
+calc.py:10: ZeroDivisionError
+========================================== short test summary info ===========================================
+FAILED test_calc.py::test_subtract - assert 8 == 2
+FAILED test_calc.py::test_divide_by_zero - ZeroDivisionError: division by zero
+2 failed, 1 passed in 0.01s
+[32m$ [0magent -p 'Fix the failing tests in calc.py' --force --output-format text
+`subtract` now returns `a - b`, and `divide` raises `ValueError` containing `"zero"` instead of letting Python emit `ZeroDivisionError`. All three tests pass.
+
+Trade-off: callers that already catch `ZeroDivisionError` will miss this path.
+[?25h[32m$ [0mgit diff --stat
+ calc.py | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+[32m$ [0mpytest -q
+...                                                                                                    [100%]
+3 passed in 0.00s

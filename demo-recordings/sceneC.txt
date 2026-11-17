@@ -1,0 +1,23 @@
+[32m$ [0mcd /tmp/demo-app
+[32m$ [0mgit checkout .
+Updated 0 paths from the index
+[32m$ [0magent -p 'Read calc.py and review it for bugs. Reply in 3 short bullets.' --output-format json | tee /tmp/cursor-review.json
+{"type":"result","subtype":"success","is_error":false,"duration_ms":4845,"duration_api_ms":4845,"result":"> Auto routed to Grok 4.6\n\nI'll read `calc.py` and look for actual bugs, then give you three short bullets.- `subtract` adds instead of subtracting (`return a + b`).\n- `divide` does not guard against `b == 0`, so it raises `ZeroDivisionError`.\n- No type checks: non-numeric inputs fail at runtime with a generic `TypeError`.","session_id":"7245f550-08f5-4168-8a96-d685808ebac8","request_id":"8c54c6c9-3209-4d3f-b8ad-8b067d7d93e7","usage":{"inputTokens":13986,"outputTokens":161,"cacheReadTokens":23424,"cacheWriteTokens":0,"reasoningTokens":68}}
+[32m$ [0mjq 'keys' /tmp/cursor-review.json
+[
+  "duration_api_ms",
+  "duration_ms",
+  "is_error",
+  "request_id",
+  "result",
+  "session_id",
+  "subtype",
+  "type",
+  "usage"
+]
+[32m$ [0mjq -r "if .result != null then .result elif .text != null then .text else . end" /tmp/cursor-review.json
+> Auto routed to Grok 4.6
+
+I'll read `calc.py` and look for actual bugs, then give you three short bullets.- `subtract` adds instead of subtracting (`return a + b`).
+- `divide` does not guard against `b == 0`, so it raises `ZeroDivisionError`.
+- No type checks: non-numeric inputs fail at runtime with a generic `TypeError`.
