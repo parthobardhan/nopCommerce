@@ -20,7 +20,8 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading,
       testID={testID}
       accessibilityRole="button"
       accessibilityState={{ disabled: !!inactive, busy: !!loading }}
-      onPress={inactive ? undefined : onPress}
+      disabled={!!inactive}
+      onPress={onPress}
       style={({ pressed }) => [
         styles.base,
         styles[variant],

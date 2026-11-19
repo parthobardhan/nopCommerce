@@ -28,7 +28,7 @@ export function CartItemRow({ item, onChangeQuantity, onRemove, busy }: CartItem
         <Text style={styles.unitPrice}>{item.unitPrice} each</Text>
         <View style={styles.actions}>
           <QuantityStepper value={item.quantity} onChange={onChangeQuantity} min={1} disabled={busy} testID={`cart-item-${item.id}-quantity`} />
-          <Pressable testID={`cart-item-${item.id}-remove`} accessibilityRole="button" onPress={busy ? undefined : onRemove}>
+          <Pressable testID={`cart-item-${item.id}-remove`} accessibilityRole="button" disabled={busy} onPress={onRemove}>
             <Text style={styles.remove}>Remove</Text>
           </Pressable>
         </View>

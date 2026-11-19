@@ -23,7 +23,8 @@ export function QuantityStepper({ value, onChange, min = 1, max = 10000, disable
         accessibilityRole="button"
         accessibilityLabel="Decrease quantity"
         accessibilityState={{ disabled: !canDecrease }}
-        onPress={canDecrease ? () => onChange(value - 1) : undefined}
+        disabled={!canDecrease}
+        onPress={() => onChange(value - 1)}
         style={[styles.button, !canDecrease && styles.disabled]}
       >
         <Text style={styles.symbol}>−</Text>
@@ -36,7 +37,8 @@ export function QuantityStepper({ value, onChange, min = 1, max = 10000, disable
         accessibilityRole="button"
         accessibilityLabel="Increase quantity"
         accessibilityState={{ disabled: !canIncrease }}
-        onPress={canIncrease ? () => onChange(value + 1) : undefined}
+        disabled={!canIncrease}
+        onPress={() => onChange(value + 1)}
         style={[styles.button, !canIncrease && styles.disabled]}
       >
         <Text style={styles.symbol}>+</Text>
