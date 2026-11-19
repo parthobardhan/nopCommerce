@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Primitives;
 using Nop.Core;
 using Nop.Core.Domain.Common;
 using Nop.Core.Domain.Customers;
@@ -161,8 +163,10 @@ public class MobileApiCheckoutService : IMobileApiCheckoutService
         var methods = new List<IPaymentMethod>();
         foreach (var method in await _paymentPluginManager.LoadActivePluginsAsync(customer, store.Id, billingAddress?.CountryId ?? 0))
         {
-            //only methods that need neither a payment form nor a browser redirect can be completed in the app
+            //only methods that need neither a browser redirect nor payment form input (e.g. card details) can be completed in the app
             if (method.PaymentMethodType != PaymentMethodType.Standard || await method.HidePaymentMethodAsync(cart))
+                continue;
+            if ((await method.ValidatePaymentFormAsync(new FormCollection(new Dictionary<string, StringValues>()))).Any())
                 continue;
 
             methods.Add(method);

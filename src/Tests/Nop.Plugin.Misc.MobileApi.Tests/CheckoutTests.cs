@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Moq;
 using Nop.Core;
 using Nop.Core.Domain.Customers;
@@ -8,6 +9,8 @@ using Nop.Plugin.Misc.MobileApi.Services;
 using Nop.Services.Common;
 using Nop.Services.Directory;
 using Nop.Services.Orders;
+using Nop.Services.Payments;
+using Nop.Services.Plugins;
 
 namespace Nop.Plugin.Misc.MobileApi.Tests;
 
@@ -295,6 +298,40 @@ public class CheckoutTests : MobileApiTestBase
     {
         (await CheckoutService.SelectPaymentMethodAsync(_customer, null)).Errors.Should().BeEquivalentTo(["Payment method is required"]);
         (await CheckoutService.SelectPaymentMethodAsync(_customer, new SelectPaymentMethodRequest { SystemName = "Payments.Unknown" }))
+            .Errors.Should().BeEquivalentTo(["Payment method is not available"]);
+    }
+
+    private static IPaymentMethod PaymentMethod(string systemName, PaymentMethodType type = PaymentMethodType.Standard,
+        bool hidden = false, params string[] formErrors)
+    {
+        var method = new Mock<IPaymentMethod>();
+        method.SetupGet(m => m.PluginDescriptor).Returns(new PluginDescriptor { SystemName = systemName, FriendlyName = systemName });
+        method.SetupGet(m => m.PaymentMethodType).Returns(type);
+        method.Setup(m => m.HidePaymentMethodAsync(It.IsAny<IList<ShoppingCartItem>>())).ReturnsAsync(hidden);
+        method.Setup(m => m.ValidatePaymentFormAsync(It.IsAny<IFormCollection>())).ReturnsAsync(formErrors);
+        method.Setup(m => m.GetPaymentMethodDescriptionAsync()).ReturnsAsync($"{systemName} description");
+        return method.Object;
+    }
+
+    [Test]
+    public async Task OnlyPaymentMethodsTheAppCanCompleteAreOffered()
+    {
+        await AddProductToCartAsync();
+        var pluginManager = new Mock<IPaymentPluginManager>();
+        pluginManager.Setup(m => m.LoadActivePluginsAsync(It.IsAny<Customer>(), It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync([
+            PaymentMethod("Payments.Offline"),
+            PaymentMethod("Payments.Redirect", PaymentMethodType.Redirection),
+            PaymentMethod("Payments.Button", PaymentMethodType.Button),
+            PaymentMethod("Payments.Hidden", hidden: true),
+            PaymentMethod("Payments.Card", PaymentMethodType.Standard, false, "Card number is required")
+        ]);
+        var checkoutService = CreateCheckoutService(pluginManager.Object);
+
+        var methods = await checkoutService.GetPaymentMethodsAsync(_customer);
+
+        methods.Select(m => m.SystemName).Should().BeEquivalentTo(["Payments.Offline"]);
+        methods.Single().Description.Should().Be("Payments.Offline description");
+        (await checkoutService.SelectPaymentMethodAsync(_customer, new SelectPaymentMethodRequest { SystemName = "Payments.Card" }))
             .Errors.Should().BeEquivalentTo(["Payment method is not available"]);
     }
 
