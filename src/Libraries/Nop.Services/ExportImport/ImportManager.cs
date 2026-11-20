@@ -1077,7 +1077,13 @@ public partial class ImportManager : IImportManager
         var startDateTimeUtc = tierPriceManager.GetDefaultProperty("StartDateTimeUtc").DateTimeNullable;
         var endDateTimeUtc = tierPriceManager.GetDefaultProperty("EndDateTimeUtc").DateTimeNullable;
 
-        if (id == 0)
+        // Update only when the row already belongs to this product. A foreign or missing
+        // TierPriceId must not re-home another SKU's volume price (vendor XLSX can post any id).
+        var existingTierPrice = id > 0 ? await _productService.GetTierPriceByIdAsync(id) : null;
+        if (existingTierPrice != null && existingTierPrice.ProductId != lastLoadedProduct.Id)
+            existingTierPrice = null;
+
+        if (existingTierPrice == null)
         {
             var tierPrice = new TierPrice
             {
@@ -1094,17 +1100,14 @@ public partial class ImportManager : IImportManager
         }
         else
         {
-            var tierPrice = await _productService.GetTierPriceByIdAsync(id);
+            existingTierPrice.CustomerRoleId = customerRoleId != 0 ? customerRoleId : null;
+            existingTierPrice.EndDateTimeUtc = endDateTimeUtc;
+            existingTierPrice.Price = price;
+            existingTierPrice.Quantity = quantity;
+            existingTierPrice.StartDateTimeUtc = startDateTimeUtc;
+            existingTierPrice.StoreId = storeId;
 
-            tierPrice.CustomerRoleId = customerRoleId != 0 ? customerRoleId : null;
-            tierPrice.EndDateTimeUtc = endDateTimeUtc;
-            tierPrice.Price = price;
-            tierPrice.ProductId = lastLoadedProduct.Id;
-            tierPrice.Quantity = quantity;
-            tierPrice.StartDateTimeUtc = startDateTimeUtc;
-            tierPrice.StoreId = storeId;
-
-            await _productService.UpdateTierPriceAsync(tierPrice);
+            await _productService.UpdateTierPriceAsync(existingTierPrice);
         }
     }
 
