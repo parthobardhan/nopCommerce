@@ -591,6 +591,7 @@ public partial class AdminMapperConfiguration : BaseMapperProfile
             .ForMember(model => model.Warnings, options => options.Ignore())
             .ForMember(model => model.PictureIds, options => options.Ignore());
         CreateMap<ProductAttributeCombinationModel, ProductAttributeCombination>()
+            .ForMember(entity => entity.ProductId, options => options.Ignore())
             .ForMember(entity => entity.AttributesXml, options => options.Ignore());
 
         CreateMap<ProductAttribute, ProductAttributeModel>()
@@ -616,6 +617,7 @@ public partial class AdminMapperConfiguration : BaseMapperProfile
             .ForMember(model => model.ConditionModel, options => options.Ignore())
             .ForMember(model => model.ProductAttributeValueSearchModel, options => options.Ignore());
         CreateMap<ProductAttributeMappingModel, ProductAttributeMapping>()
+            .ForMember(entity => entity.ProductId, options => options.Ignore())
             .ForMember(entity => entity.ConditionAttributeXml, options => options.Ignore())
             .ForMember(entity => entity.AttributeControlType, options => options.Ignore());
 
@@ -631,6 +633,7 @@ public partial class AdminMapperConfiguration : BaseMapperProfile
             .ForMember(model => model.ProductPictureModels, options => options.Ignore())
             .ForMember(model => model.PictureIds, options => options.Ignore());
         CreateMap<ProductAttributeValueModel, ProductAttributeValue>()
+            .ForMember(entity => entity.ProductAttributeMappingId, options => options.Ignore())
             .ForMember(entity => entity.AttributeValueType, options => options.Ignore())
             .ForMember(entity => entity.Quantity, options => options.Ignore());
 

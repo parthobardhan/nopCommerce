@@ -3258,6 +3258,7 @@ public partial class ProductController : BaseAdminController
 
         //insert mapping
         var productAttributeMapping = model.ToEntity<ProductAttributeMapping>();
+        productAttributeMapping.ProductId = product.Id;
 
         await _productAttributeService.InsertProductAttributeMappingAsync(productAttributeMapping);
         await UpdateLocalesAsync(productAttributeMapping, model);
@@ -3363,6 +3364,7 @@ public partial class ProductController : BaseAdminController
 
         //fill entity from model
         productAttributeMapping = model.ToEntity(productAttributeMapping);
+        productAttributeMapping.ProductId = product.Id;
         await _productAttributeService.UpdateProductAttributeMappingAsync(productAttributeMapping);
 
         await UpdateLocalesAsync(productAttributeMapping, model);
@@ -3537,7 +3539,7 @@ public partial class ProductController : BaseAdminController
         {
             //fill entity from model
             var pav = model.ToEntity<ProductAttributeValue>();
-
+            pav.ProductAttributeMappingId = productAttributeMapping.Id;
             pav.Quantity = model.CustomerEntersQty ? 1 : model.Quantity;
 
             await _productAttributeService.InsertProductAttributeValueAsync(pav);
@@ -3631,6 +3633,7 @@ public partial class ProductController : BaseAdminController
         {
             //fill entity from model
             productAttributeValue = model.ToEntity(productAttributeValue);
+            productAttributeValue.ProductAttributeMappingId = productAttributeMapping.Id;
             productAttributeValue.Quantity = model.CustomerEntersQty ? 1 : model.Quantity;
             await _productAttributeService.UpdateProductAttributeValueAsync(productAttributeValue);
 
@@ -3860,6 +3863,7 @@ public partial class ProductController : BaseAdminController
         {
             //save combination
             var combination = model.ToEntity<ProductAttributeCombination>();
+            combination.ProductId = product.Id;
 
             //fill attributes
             combination.AttributesXml = attributesXml;
@@ -4028,6 +4032,7 @@ public partial class ProductController : BaseAdminController
             //save combination
             //fill entity from model
             combination = model.ToEntity(combination);
+            combination.ProductId = product.Id;
             combination.AttributesXml = attributesXml;
 
             await _productAttributeService.UpdateProductAttributeCombinationAsync(combination);
