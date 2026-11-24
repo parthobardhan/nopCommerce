@@ -126,9 +126,15 @@ The settings window is a local page with its own preload. That preload exposes `
 
 ## Campaigns
 
-`campaigns/black-friday-2026.json` is bundled into the package. It only advertises the offer; create the discount and its code in nopCommerce admin separately. Nothing is shown in the window yet; the main process logs `Campaign <id> is active` and `Campaign <id> is inactive`.
+`campaigns/black-friday-2026.json` is bundled into the package. It only advertises the offer; create the discount and its code in nopCommerce admin separately.
 
-`settings.json` may also hold a `promotions` object (no Settings UI yet):
+While the campaign is active, a 56 px strip sits above the storefront: headline, body, the code with **Copy**, the CTA, and **×** to dismiss. The strip is its own sandboxed view (`static/banner.html`, strict CSP, text set with `textContent`) whose preload exposes only `dismiss`, `copyCode`, and `openCta`. The main process ignores those messages from any other sender or with arguments, and picks the code and URL itself. The CTA follows the same rules as a storefront link: the store origin opens in the window, other http(s) opens in the system browser, and other schemes are blocked. Dismissing is remembered per campaign `id`.
+
+When the campaign starts, or on the first launch during it, the shell posts one notification (`Black Friday is live: 25% off everything with code BLACKFRIDAY25.` for the bundled file) and records it so a restart does not repeat it. `notifyOnStart: false` turns that off.
+
+Settings → **Show promotional banners** is the kill switch; saving applies it immediately. The line under it names the active campaign and its end.
+
+`settings.json` holds these under `promotions`:
 
 | Field | Default | Effect |
 | --- | --- | --- |

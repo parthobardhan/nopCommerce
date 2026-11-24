@@ -8,6 +8,9 @@ export type SettingsView = {
   effectiveUrl: string;
   urlOverriddenByEnv: boolean;
   minimizeToTray: boolean;
+  showPromotions: boolean;
+  /** Read-only summary line, or null when no campaign is active. */
+  activeCampaign: string | null;
 };
 
 export type SettingsSaveResponse = {
@@ -32,6 +35,8 @@ export function registerSettingsIpc(host: SettingsHost): void {
         effectiveUrl: "",
         urlOverriddenByEnv: false,
         minimizeToTray: false,
+        showPromotions: false,
+        activeCampaign: null,
       };
     }
     return host.getView();
@@ -57,7 +62,7 @@ export function openSettingsWindow(parent: BrowserWindow | undefined): void {
 
   const window = new BrowserWindow({
     width: 460,
-    height: 490,
+    height: 600,
     title: "Settings",
     parent,
     resizable: false,

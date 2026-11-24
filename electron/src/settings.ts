@@ -223,6 +223,14 @@ export function resolveLaunchSettings(
   };
 }
 
+/** null when the form did not send the Promotions toggle. */
+export function showPromotionsFromInput(input: unknown): boolean | null {
+  if (!isPlainObject(input) || typeof input.showPromotions !== "boolean") {
+    return null;
+  }
+  return input.showPromotions;
+}
+
 export function settingsFromInput(input: unknown): SettingsFormResult {
   if (!input || typeof input !== "object") {
     return { ok: false, message: "Settings were not a form." };

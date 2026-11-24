@@ -1,11 +1,31 @@
-import { app, BrowserWindow, Notification, dialog, ipcMain, powerMonitor, screen, session } from "electron";
+import {
+  app,
+  BrowserWindow,
+  Notification,
+  WebContentsView,
+  clipboard,
+  dialog,
+  ipcMain,
+  powerMonitor,
+  screen,
+  session,
+  shell,
+  type WebContents,
+} from "electron";
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import { installAppMenu } from "./app-menu";
 import { destroyTray, installTray } from "./app-tray";
-import { BUNDLED_CAMPAIGN_FILE, loadCampaign, readCampaignFile, type Campaign } from "./campaign";
+import { BannerHost, bannerFile, bannerWebPreferences, registerBannerIpc, storeWebPreferences } from "./banner-host";
+import { BUNDLED_CAMPAIGN_FILE, readCampaignFile, type Campaign } from "./campaign";
 import { CampaignScheduler } from "./campaign-scheduler";
-import { aboutCopy, canDeliverNotification, sampleNotification, shouldHideWhenMinimized } from "./desktop-shell";
+import {
+  aboutCopy,
+  canDeliverNotification,
+  sampleNotification,
+  shouldHideWhenMinimized,
+  type DesktopNotice,
+} from "./desktop-shell";
 import {
   connectionErrorFile,
   formatLoadFailure,
@@ -17,12 +37,12 @@ import { devToolsInMenu } from "./menu-spec";
 import { attachNavigationGuards } from "./navigation-guard";
 import { findDeepLink, protocolClientInvocation } from "./protocol-stub";
 import { RETRY_CHANNEL } from "./retry-channel";
+import { campaignSummary, PromotionController } from "./promotions";
 import { persistSessionCookies } from "./session-cookies";
 import { STORE_PARTITION } from "./session-partition";
 import {
   ADMIN_PATH,
   STOREFRONT_PATH,
-  campaignOverride,
   defaultShellSettings,
   promotionsEnabled,
   formatWindowTitle,
@@ -30,7 +50,9 @@ import {
   resolveLaunchSettings,
   settingsFile,
   settingsFromInput,
+  showPromotionsFromInput,
   urlForStorePath,
+  withPromotionsEnabled,
   writeSettings,
   type ShellSettings,
 } from "./settings";
@@ -46,6 +68,7 @@ import {
 
 const DEFAULT_WIDTH = 1280;
 const DEFAULT_HEIGHT = 800;
+const APP_ROOT = path.join(__dirname, "..");
 
 let storeUrl = "";
 let environmentLabel = defaultShellSettings().environmentLabel;
@@ -53,14 +76,21 @@ let urlOverriddenByEnv = false;
 let storedSettings: ShellSettings = defaultShellSettings();
 let pendingDeepLink = findDeepLink(process.argv);
 let storeWindow: BrowserWindow | undefined;
-let campaignScheduler: CampaignScheduler | undefined;
+let bannerHost: BannerHost<WebContentsView> | undefined;
+let promotions: PromotionController | undefined;
 const attemptedUrl = new WeakMap<BrowserWindow, string>();
+const storeViews = new WeakMap<BrowserWindow, WebContentsView>();
 
 function storefrontWindow(): BrowserWindow | undefined {
   if (storeWindow && !storeWindow.isDestroyed()) {
     return storeWindow;
   }
   return undefined;
+}
+
+/** The storefront renders in a child view so the banner can sit above it. */
+function storeContents(window: BrowserWindow): WebContents {
+  return storeViews.get(window)?.webContents ?? window.webContents;
 }
 
 function applyEnvironmentTitle(window: BrowserWindow, pageTitle: string): void {
@@ -71,19 +101,19 @@ function loadStore(window: BrowserWindow, url: string): void {
   attemptedUrl.set(window, url);
   // did-fail-load renders the connection page; catch so a refused connection
   // is not also an unhandled promise rejection.
-  void window.loadURL(url).catch(() => undefined);
+  void storeContents(window).loadURL(url).catch(() => undefined);
 }
 
 function showConnectionError(window: BrowserWindow, failedUrl: string, detail: string): void {
-  const file = connectionErrorFile(path.join(__dirname, ".."));
-  void window.loadFile(file, { query: { storeUrl: failedUrl, detail } }).catch((error: unknown) => {
+  const file = connectionErrorFile(APP_ROOT);
+  void storeContents(window).loadFile(file, { query: { storeUrl: failedUrl, detail } }).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Could not open the connection page: ${message}`);
   });
 }
 
 function retryStore(window: BrowserWindow): void {
-  if (!isConnectionErrorUrl(window.webContents.getURL())) {
+  if (!isConnectionErrorUrl(storeContents(window).getURL())) {
     return;
   }
   loadStore(window, attemptedUrl.get(window) ?? storeUrl);
@@ -99,11 +129,11 @@ function openStorePath(storePath: string): void {
 }
 
 function reloadWindow(window: BrowserWindow): void {
-  if (isConnectionErrorUrl(window.webContents.getURL())) {
+  if (isConnectionErrorUrl(storeContents(window).getURL())) {
     retryStore(window);
     return;
   }
-  window.webContents.reload();
+  storeContents(window).reload();
 }
 
 function rememberWindowState(window: BrowserWindow, filePath: string): void {
@@ -169,14 +199,19 @@ function createMainWindow(): BrowserWindow {
     ...(initial.x !== undefined && initial.y !== undefined ? { x: initial.x, y: initial.y } : {}),
     width: initial.width,
     height: initial.height,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      partition: STORE_PARTITION,
-      preload: path.join(__dirname, "..", "static", "preload.js"),
-    },
+    webPreferences: storeWebPreferences(APP_ROOT),
   });
+  const storeView = new WebContentsView({ webPreferences: storeWebPreferences(APP_ROOT) });
+  window.contentView.addChildView(storeView);
+  storeViews.set(window, storeView);
+  const contents = storeView.webContents;
+  const banner = new BannerHost<WebContentsView>(
+    window.contentView,
+    storeView,
+    createBannerView,
+    bannerFile(APP_ROOT),
+  );
+  bannerHost = banner;
 
   if (initial.isMaximized) {
     window.maximize();
@@ -187,7 +222,13 @@ function createMainWindow(): BrowserWindow {
     if (storeWindow === window) {
       storeWindow = undefined;
     }
+    if (bannerHost === banner) {
+      bannerHost = undefined;
+    }
+    banner.dispose();
+    contents.close();
   });
+  window.on("focus", () => contents.focus());
   window.on("minimize", () => {
     if (!shouldHideWhenMinimized(storedSettings.minimizeToTray)) {
       return;
@@ -197,19 +238,19 @@ function createMainWindow(): BrowserWindow {
     // emits minimize; tray → Hide window still works.
     window.hide();
   });
-  window.on("page-title-updated", (event, title) => {
+  contents.on("page-title-updated", (event, title) => {
     event.preventDefault();
     applyEnvironmentTitle(window, title);
   });
 
   rememberWindowState(window, statePath);
-  attachNavigationGuards(window, {
+  attachNavigationGuards(contents, {
     getStoreUrl: () => storeUrl,
-    connectionFile: connectionErrorFile(path.join(__dirname, "..")),
+    connectionFile: connectionErrorFile(APP_ROOT),
     openInWindow: (url) => loadStore(window, url),
   });
 
-  window.webContents.on(
+  contents.on(
     "did-fail-load",
     (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       if (!isMainFrame || !isUnreachableLoadError(errorCode)) {
@@ -224,7 +265,16 @@ function createMainWindow(): BrowserWindow {
   );
 
   loadStore(window, takeStartupUrl());
+  promotions?.start();
   return window;
+}
+
+function createBannerView(): WebContentsView {
+  const view = new WebContentsView({ webPreferences: bannerWebPreferences(APP_ROOT) });
+  view.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  view.webContents.on("will-navigate", (event) => event.preventDefault());
+  view.webContents.on("will-frame-navigate", (event) => event.preventDefault());
+  return view;
 }
 
 function takeStartupUrl(): string {
@@ -309,7 +359,9 @@ function bootstrap(): void {
       },
       devtools: () => {
         const window = BrowserWindow.getFocusedWindow() ?? storefrontWindow();
-        window?.webContents.openDevTools({ mode: "detach" });
+        if (window) {
+          storeContents(window).openDevTools({ mode: "detach" });
+        }
       },
       notify: () => showSampleNotification(),
       about: () => showAbout(),
@@ -324,6 +376,8 @@ function bootstrap(): void {
       effectiveUrl: storeUrl,
       urlOverriddenByEnv,
       minimizeToTray: storedSettings.minimizeToTray,
+      showPromotions: promotionsEnabled(storedSettings),
+      activeCampaign: activeCampaignSummary(),
     }),
     save: (input) => {
       const parsed = settingsFromInput(input);
@@ -331,6 +385,10 @@ function bootstrap(): void {
         return parsed;
       }
       storedSettings = { ...parsed.settings, promotions: storedSettings.promotions };
+      const showPromotions = showPromotionsFromInput(input);
+      if (showPromotions !== null) {
+        storedSettings = withPromotionsEnabled(storedSettings, showPromotions);
+      }
       environmentLabel = parsed.settings.environmentLabel;
       try {
         writeSettings(settingsFile(app.getPath("userData")), storedSettings);
@@ -340,15 +398,17 @@ function bootstrap(): void {
       }
       const window = storefrontWindow();
       if (window) {
-        applyEnvironmentTitle(window, window.webContents.getTitle());
+        applyEnvironmentTitle(window, storeContents(window).getTitle());
       }
       if (!urlOverriddenByEnv) {
         storeUrl = storedSettings.storeUrl;
         if (window) {
           loadStore(window, storeUrl);
         }
+        promotions?.refresh();
         return { ok: true, message: "Saved. Opening the store.", settings: parsed.settings };
       }
+      promotions?.refresh();
       return {
         ok: true,
         message: "Saved for the next launch. This process is still using NOPCOMMERCE_URL.",
@@ -358,8 +418,8 @@ function bootstrap(): void {
   });
 
   ipcMain.on(RETRY_CHANNEL, (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window || window !== storefrontWindow()) {
+    const window = storefrontWindow();
+    if (!window || event.sender !== storeContents(window)) {
       return;
     }
     retryStore(window);
@@ -367,7 +427,7 @@ function bootstrap(): void {
 
   createMainWindow();
   scheduleUpdateCheck();
-  startCampaignScheduler();
+  startPromotions();
   try {
     installTray({
       show: showStorefront,
@@ -395,7 +455,7 @@ app.on("before-quit", (event) => {
   }
   event.preventDefault();
   quitting = true;
-  campaignScheduler?.stop();
+  promotions?.stop();
   persistSessionCookies(session.fromPartition(STORE_PARTITION))
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -427,37 +487,87 @@ function showAbout(): void {
   });
 }
 
-function showSampleNotification(): void {
-  const notice = sampleNotification(app.getVersion());
+function deliverNotice(notice: DesktopNotice): boolean {
   if (!canDeliverNotification(process.platform, Notification.isSupported(), process.env.DBUS_SESSION_BUS_ADDRESS)) {
-    void dialog.showMessageBox({
-      type: "info",
-      title: notice.title,
-      message: "Notifications are not available in this session.",
-      detail: notice.body,
-    });
-    return;
+    return false;
   }
   const notification = new Notification({ title: notice.title, body: notice.body });
   notification.on("click", () => showStorefront());
   notification.show();
+  return true;
 }
 
-function startCampaignScheduler(): void {
-  if (!promotionsEnabled(storedSettings)) {
-    console.log("Promotions are turned off in settings");
+function showSampleNotification(): void {
+  const notice = sampleNotification(app.getVersion());
+  if (deliverNotice(notice)) {
+    return;
   }
-  const campaign = loadCampaign({
-    bundled: readCampaignFile(path.join(__dirname, "..", BUNDLED_CAMPAIGN_FILE)),
-    override: campaignOverride(storedSettings),
-    promotionsEnabled: promotionsEnabled(storedSettings),
-    storeUrl,
+  void dialog.showMessageBox({
+    type: "info",
+    title: notice.title,
+    message: "Notifications are not available in this session.",
+    detail: notice.body,
+  });
+}
+
+function activeCampaignSummary(): string | null {
+  const campaign = promotions?.activeCampaign();
+  return campaign ? campaignSummary(campaign) : null;
+}
+
+function startPromotions(): void {
+  promotions = new PromotionController({
+    readBundled: () => readCampaignFile(path.join(APP_ROOT, BUNDLED_CAMPAIGN_FILE)),
+    getSettings: () => storedSettings,
+    saveSettings: (settings) => {
+      storedSettings = settings;
+      try {
+        writeSettings(settingsFile(app.getPath("userData")), settings);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`Could not save promotion settings: ${message}`);
+      }
+    },
+    getStoreUrl: () => storeUrl,
+    createScheduler: (campaign) => {
+      const scheduler = new CampaignScheduler({ campaign, power: powerMonitor });
+      scheduler.on("active", (active: Campaign) => console.log(`Campaign ${active.id} is active`));
+      scheduler.on("inactive", (ended: Campaign) => console.log(`Campaign ${ended.id} is inactive`));
+      return scheduler;
+    },
+    now: Date.now,
+    banner: {
+      show: (model) => bannerHost?.show(model),
+      hide: () => bannerHost?.hide(),
+    },
+    notify: (notice) => {
+      const shown = deliverNotice(notice);
+      console.log(`${shown ? "Sale notification shown" : "Sale notification unavailable in this session"}: ${notice.body}`);
+      return shown;
+    },
+    copyText: (text) => clipboard.writeText(text),
+    openInStore: (url) => {
+      const window = storefrontWindow();
+      if (window) {
+        loadStore(window, url);
+        window.focus();
+      }
+    },
+    openExternal: (url) => {
+      void shell.openExternal(url).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`Could not open ${url} in the system browser: ${message}`);
+      });
+    },
+    log: (message) => console.log(message),
     warn: (message) => console.warn(message),
   });
-  campaignScheduler = new CampaignScheduler({ campaign, power: powerMonitor });
-  campaignScheduler.on("active", (active: Campaign) => console.log(`Campaign ${active.id} is active`));
-  campaignScheduler.on("inactive", (ended: Campaign) => console.log(`Campaign ${ended.id} is inactive`));
-  campaignScheduler.start();
+  registerBannerIpc(ipcMain, (sender) => bannerHost?.isBannerContents(sender) === true, {
+    dismiss: () => promotions?.dismiss(),
+    copyCode: () => promotions?.copyCode(),
+    openCta: () => promotions?.openCta(),
+  });
+  promotions.start();
 }
 
 function scheduleUpdateCheck(): void {
