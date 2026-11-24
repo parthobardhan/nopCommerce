@@ -18,6 +18,8 @@ test("electron-builder config covers Windows, macOS, and Linux", () => {
   assert.match(config, /publish: null/);
   assert.match(config, /!dist\/\*\*\/\*\.test\.js/);
   assert.match(config, /afterPack:/);
+  assert.match(config, /^ {2}- campaigns\/\*\.json$/m);
+  assert.ok(fs.existsSync(path.join(root, "campaigns", "black-friday-2026.json")));
   assert.doesNotMatch(config, /BEGIN (CERTIFICATE|PRIVATE KEY)/);
   assert.doesNotMatch(config, /CSC_KEY_PASSWORD=\S+/);
 });

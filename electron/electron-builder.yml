@@ -11,6 +11,7 @@ files:
   - "!dist/**/*.test.js"
   - "!dist/**/*.test.js.map"
   - static/**
+  - campaigns/*.json
   - package.json
 asar: true
 # Fuses are flipped in scripts/after-pack.js. macOS hardened runtime stays off
