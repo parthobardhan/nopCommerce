@@ -10,11 +10,26 @@ export const SETTINGS_FILE = "settings.json";
 const MAX_LABEL_LENGTH = 40;
 const MAX_URL_LENGTH = 2000;
 
+/** Campaign ids key the state map, so they cannot be `__proto__` or similar. */
+export const CAMPAIGN_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+export type CampaignState = { dismissed: boolean; notified: boolean };
+
+export type PromotionSettings = {
+  /** Kill switch. When false no campaign is scheduled. */
+  enabled: boolean;
+  /** Shallow-merged over the bundled campaign before validation. */
+  campaignOverride?: Record<string, unknown>;
+  campaignState: Record<string, CampaignState>;
+};
+
 export type ShellSettings = {
   storeUrl: string;
   environmentLabel: string;
   /** When true, the minimize button hides the window and leaves the tray icon. */
   minimizeToTray: boolean;
+  /** Omitted until something is stored; read it through the promotion getters. */
+  promotions?: PromotionSettings;
 };
 
 export type LaunchSettings = {
@@ -86,10 +101,84 @@ export function parseStoredSettings(raw: string): ShellSettings | null {
   } catch {
     storeUrl = defaultShellSettings().storeUrl;
   }
+  const promotions = parsePromotions(record.promotions);
   return {
     storeUrl,
     environmentLabel: normalizeEnvironmentLabel(record.environmentLabel),
     minimizeToTray: record.minimizeToTray === true,
+    ...(promotions ? { promotions } : {}),
+  };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parsePromotions(value: unknown): PromotionSettings | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const campaignState: Record<string, CampaignState> = {};
+  if (isPlainObject(value.campaignState)) {
+    for (const [id, state] of Object.entries(value.campaignState)) {
+      if (CAMPAIGN_ID_PATTERN.test(id) && isPlainObject(state)) {
+        campaignState[id] = { dismissed: state.dismissed === true, notified: state.notified === true };
+      }
+    }
+  }
+  return {
+    enabled: value.enabled !== false,
+    ...(isPlainObject(value.campaignOverride) ? { campaignOverride: value.campaignOverride } : {}),
+    campaignState,
+  };
+}
+
+function promotionsOf(settings: ShellSettings): PromotionSettings {
+  return settings.promotions ?? { enabled: true, campaignState: {} };
+}
+
+export function promotionsEnabled(settings: ShellSettings): boolean {
+  return promotionsOf(settings).enabled;
+}
+
+export function withPromotionsEnabled(settings: ShellSettings, enabled: boolean): ShellSettings {
+  return { ...settings, promotions: { ...promotionsOf(settings), enabled } };
+}
+
+export function campaignOverride(settings: ShellSettings): Record<string, unknown> | undefined {
+  return promotionsOf(settings).campaignOverride;
+}
+
+/** Pass undefined to clear the override. */
+export function withCampaignOverride(
+  settings: ShellSettings,
+  override: Record<string, unknown> | undefined,
+): ShellSettings {
+  const promotions: PromotionSettings = { ...promotionsOf(settings) };
+  delete promotions.campaignOverride;
+  return { ...settings, promotions: override ? { ...promotions, campaignOverride: override } : promotions };
+}
+
+export function campaignState(settings: ShellSettings, id: string): CampaignState {
+  const states = promotionsOf(settings).campaignState;
+  return Object.hasOwn(states, id) ? states[id] : { dismissed: false, notified: false };
+}
+
+export function withCampaignState(
+  settings: ShellSettings,
+  id: string,
+  state: Partial<CampaignState>,
+): ShellSettings {
+  if (!CAMPAIGN_ID_PATTERN.test(id)) {
+    throw new Error(`Invalid campaign id: ${id}`);
+  }
+  const promotions = promotionsOf(settings);
+  return {
+    ...settings,
+    promotions: {
+      ...promotions,
+      campaignState: { ...promotions.campaignState, [id]: { ...campaignState(settings, id), ...state } },
+    },
   };
 }
 
@@ -132,6 +221,14 @@ export function resolveLaunchSettings(
     effectiveUrl: stored.storeUrl,
     urlOverriddenByEnv: false,
   };
+}
+
+/** null when the form did not send the Promotions toggle. */
+export function showPromotionsFromInput(input: unknown): boolean | null {
+  if (!isPlainObject(input) || typeof input.showPromotions !== "boolean") {
+    return null;
+  }
+  return input.showPromotions;
 }
 
 export function settingsFromInput(input: unknown): SettingsFormResult {

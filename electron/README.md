@@ -124,6 +124,26 @@ Saving while `NOPCOMMERCE_URL` is set writes the file for the next launch and le
 
 The settings window is a local page with its own preload. That preload exposes `get` and `save` only. The storefront preload still does not expose Node.
 
+## Campaigns
+
+`campaigns/black-friday-2026.json` is bundled into the package. It only advertises the offer; create the discount and its code in nopCommerce admin separately.
+
+While the campaign is active, a 56 px strip sits above the storefront: headline, body, the code with **Copy**, the CTA, and **×** to dismiss. The strip is its own sandboxed view (`static/banner.html`, strict CSP, text set with `textContent`) whose preload exposes only `dismiss`, `copyCode`, and `openCta`. The main process ignores those messages from any other sender or with arguments, and picks the code and URL itself. The CTA follows the same rules as a storefront link: the store origin opens in the window, other http(s) opens in the system browser, and other schemes are blocked. Dismissing is remembered per campaign `id`.
+
+When the campaign starts, or on the first launch during it, the shell posts one notification (`Black Friday is live: 25% off everything with code BLACKFRIDAY25.` for the bundled file) and records it so a restart does not repeat it. `notifyOnStart: false` turns that off.
+
+Settings → **Show promotional banners** is the kill switch; saving applies it immediately. The line under it names the active campaign and its end.
+
+`settings.json` holds these under `promotions`:
+
+| Field | Default | Effect |
+| --- | --- | --- |
+| `enabled` | `true` | Kill switch. `false` schedules no campaign. |
+| `campaignOverride` | none | Shallow-merged over the bundled file; `theme` is merged per color. |
+| `campaignState` | `{}` | `dismissed` and `notified` per campaign `id`. |
+
+`startsAt` and `endsAt` need `Z` or an explicit offset. The campaign is active from `startsAt` (inclusive) until `endsAt` (exclusive). `ctaUrl` must be `http`, `https`, or a store path such as `/`, which opens the store home page. Any invalid field disables the campaign and logs `Campaign disabled: …`. The schedule is rechecked at the next boundary, on resume, on screen unlock, and when the system clock jumps.
+
 ## Session
 
 The window uses the persistent partition `persist:nopcommerce`. Cookies, localStorage, and IndexedDB for the store are written under Electron's user data directory (`Partitions/nopcommerce` on Linux, inside `~/.config/nopcommerce-electron/`). The `persist:` prefix is required; a partition without it would keep the session in memory only.
@@ -215,7 +235,7 @@ The running shell keeps `contextIsolation`, `nodeIntegration: false`, and `sandb
 | `EnableNodeOptionsEnvironmentVariable` | off |
 | `EnableNodeCliInspectArguments` | off |
 | `OnlyLoadAppFromAsar` | on |
-| `GrantFileProtocolExtraPrivileges` | off. The connection and settings pages are self-contained `file:` documents. |
+| `GrantFileProtocolExtraPrivileges` | off. With it off, `file:` cannot read inside `app.asar`, so `static/**` is unpacked (`asarUnpack`) and the connection, settings, and banner pages load from `app.asar.unpacked`. |
 | `EnableEmbeddedAsarIntegrityValidation` | off. No ASAR integrity hash is embedded, so the fuse would refuse to launch. |
 | `LoadBrowserProcessSpecificV8Snapshot` | off. There is no custom snapshot. |
 

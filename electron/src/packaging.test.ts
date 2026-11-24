@@ -18,6 +18,13 @@ test("electron-builder config covers Windows, macOS, and Linux", () => {
   assert.match(config, /publish: null/);
   assert.match(config, /!dist\/\*\*\/\*\.test\.js/);
   assert.match(config, /afterPack:/);
+  assert.match(config, /^ {2}- campaigns\/\*\.json$/m);
+  assert.ok(fs.existsSync(path.join(root, "campaigns", "black-friday-2026.json")));
+  assert.match(config, /^ {2}- static\/\*\*$/m);
+  assert.match(config, /^asarUnpack:\n {2}- static\/\*\*$/m);
+  for (const file of ["banner.html", "banner.css", "banner.js", "banner-preload.js"]) {
+    assert.ok(fs.existsSync(path.join(root, "static", file)), file);
+  }
   assert.doesNotMatch(config, /BEGIN (CERTIFICATE|PRIVATE KEY)/);
   assert.doesNotMatch(config, /CSC_KEY_PASSWORD=\S+/);
 });

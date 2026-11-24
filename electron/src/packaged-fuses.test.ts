@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PACKAGED_FUSES } from "./packaged-fuses";
+import { fileProtocolRoot, PACKAGED_FUSES } from "./packaged-fuses";
 
 test("packaged fuses disable node escape hatches and keep the integrity fuse off", () => {
   assert.equal(PACKAGED_FUSES.runAsNode, false);
@@ -11,4 +11,10 @@ test("packaged fuses disable node escape hatches and keep the integrity fuse off
   assert.equal(PACKAGED_FUSES.grantFileProtocolExtraPrivileges, false);
   assert.equal(PACKAGED_FUSES.enableEmbeddedAsarIntegrityValidation, false);
   assert.equal(PACKAGED_FUSES.loadBrowserProcessSpecificV8Snapshot, false);
+});
+
+test("file:// pages load from app.asar.unpacked in a packaged build", () => {
+  assert.equal(fileProtocolRoot("/opt/nop/resources/app.asar"), "/opt/nop/resources/app.asar.unpacked");
+  assert.equal(fileProtocolRoot("C:\\nop\\resources\\app.asar"), "C:\\nop\\resources\\app.asar.unpacked");
+  assert.equal(fileProtocolRoot("/home/dev/electron"), "/home/dev/electron");
 });

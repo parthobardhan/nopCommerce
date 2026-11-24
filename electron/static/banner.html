@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Promotion</title>
+    <link rel="stylesheet" href="banner.css" />
+  </head>
+  <body>
+    <section class="strip" aria-label="Promotion">
+      <p class="copy">
+        <strong id="headline"></strong>
+        <span id="body"></span>
+      </p>
+      <span id="code-group" class="code-group" hidden>
+        <span id="code" class="chip"></span>
+        <button id="copy" type="button" class="link">Copy</button>
+      </span>
+      <button id="cta" type="button" class="cta" hidden></button>
+      <button id="dismiss" type="button" class="dismiss" aria-label="Dismiss">×</button>
+    </section>
+    <script src="banner.js"></script>
+  </body>
+</html>

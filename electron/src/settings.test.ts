@@ -6,7 +6,15 @@ import test from "node:test";
 import {
   ADMIN_PATH,
   DEFAULT_ENVIRONMENT_LABEL,
+  campaignOverride,
+  campaignState,
+  defaultShellSettings,
   formatWindowTitle,
+  parseStoredSettings,
+  promotionsEnabled,
+  withCampaignOverride,
+  withCampaignState,
+  withPromotionsEnabled,
   normalizeEnvironmentLabel,
   readSettings,
   resolveLaunchSettings,
@@ -80,4 +88,43 @@ test("round-trips settings on disk", () => {
   fs.writeFileSync(file, JSON.stringify(legacy));
   assert.equal(readSettings(file)?.minimizeToTray, false);
   assert.equal(readSettings(path.join(directory, "missing.json")), null);
+});
+
+test("promotions default on with no override or campaign state", () => {
+  const settings = defaultShellSettings();
+  assert.equal(promotionsEnabled(settings), true);
+  assert.equal(campaignOverride(settings), undefined);
+  assert.deepEqual(campaignState(settings, "black-friday-2026"), { dismissed: false, notified: false });
+  assert.equal(campaignState(settings, "constructor").dismissed, false);
+});
+
+test("promotions kill switch, override, and campaign state persist", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "nop-settings-"));
+  const file = settingsFile(directory);
+  let settings = withPromotionsEnabled(defaultShellSettings(), false);
+  settings = withCampaignOverride(settings, { headline: "Override", theme: { accent: "#00FF00" } });
+  settings = withCampaignState(settings, "black-friday-2026", { dismissed: true });
+  settings = withCampaignState(settings, "black-friday-2026", { notified: true });
+  writeSettings(file, settings);
+
+  const read = readSettings(file);
+  assert.ok(read);
+  assert.equal(promotionsEnabled(read), false);
+  assert.deepEqual(campaignOverride(read), { headline: "Override", theme: { accent: "#00FF00" } });
+  assert.deepEqual(campaignState(read, "black-friday-2026"), { dismissed: true, notified: true });
+  assert.equal(campaignOverride(withCampaignOverride(read, undefined)), undefined);
+  assert.throws(() => withCampaignState(read, "__proto__", { dismissed: true }), /Invalid campaign id/);
+});
+
+test("malformed promotions fields are dropped instead of failing the settings file", () => {
+  const parsed = parseStoredSettings(
+    `{"storeUrl":"http://localhost/","environmentLabel":"Local","promotions":{"enabled":"no",` +
+      `"campaignOverride":["x"],"campaignState":{"black-friday-2026":{"dismissed":1},` +
+      `"__proto__":{"dismissed":true},"BAD":{}}}}`,
+  );
+  assert.ok(parsed);
+  assert.equal(({} as { dismissed?: boolean }).dismissed, undefined);
+  assert.equal(promotionsEnabled(parsed), true);
+  assert.equal(campaignOverride(parsed), undefined);
+  assert.deepEqual(parsed.promotions?.campaignState, { "black-friday-2026": { dismissed: false, notified: false } });
 });

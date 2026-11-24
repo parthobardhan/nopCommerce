@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
+import { fileProtocolRoot } from "./packaged-fuses";
 import { SETTINGS_GET_CHANNEL, SETTINGS_SAVE_CHANNEL } from "./settings-channel";
 
 export type SettingsView = {
@@ -8,6 +9,9 @@ export type SettingsView = {
   effectiveUrl: string;
   urlOverriddenByEnv: boolean;
   minimizeToTray: boolean;
+  showPromotions: boolean;
+  /** Read-only summary line, or null when no campaign is active. */
+  activeCampaign: string | null;
 };
 
 export type SettingsSaveResponse = {
@@ -32,6 +36,8 @@ export function registerSettingsIpc(host: SettingsHost): void {
         effectiveUrl: "",
         urlOverriddenByEnv: false,
         minimizeToTray: false,
+        showPromotions: false,
+        activeCampaign: null,
       };
     }
     return host.getView();
@@ -57,7 +63,7 @@ export function openSettingsWindow(parent: BrowserWindow | undefined): void {
 
   const window = new BrowserWindow({
     width: 460,
-    height: 490,
+    height: 600,
     title: "Settings",
     parent,
     resizable: false,
@@ -88,5 +94,5 @@ export function openSettingsWindow(parent: BrowserWindow | undefined): void {
       event.preventDefault();
     }
   });
-  void window.loadFile(path.join(__dirname, "..", "static", "settings.html"));
+  void window.loadFile(path.join(fileProtocolRoot(path.join(__dirname, "..")), "static", "settings.html"));
 }

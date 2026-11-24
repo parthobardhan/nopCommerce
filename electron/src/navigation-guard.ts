@@ -1,4 +1,4 @@
-import { shell, type BrowserWindow } from "electron";
+import { shell, type WebContents } from "electron";
 import { decideNavigation, type NavigationDecision } from "./navigation-policy";
 
 type GuardOptions = {
@@ -14,7 +14,7 @@ function openExternal(url: string): void {
   });
 }
 
-export function attachNavigationGuards(window: BrowserWindow, options: GuardOptions): void {
+export function attachNavigationGuards(contents: WebContents, options: GuardOptions): void {
   let lastExternalUrl = "";
   let lastExternalAt = 0;
 
@@ -45,15 +45,15 @@ export function attachNavigationGuards(window: BrowserWindow, options: GuardOpti
 
   // loadURL and loadFile do not emit these events, so Retry and the
   // connection page are unchanged. Clicks, window.location, and redirects do.
-  window.webContents.on("will-frame-navigate", (event) => {
+  contents.on("will-frame-navigate", (event) => {
     apply(() => event.preventDefault(), event.url, event.isMainFrame);
   });
 
-  window.webContents.on("will-redirect", (event, url) => {
+  contents.on("will-redirect", (event, url) => {
     apply(() => event.preventDefault(), event.url || url, event.isMainFrame);
   });
 
-  window.webContents.setWindowOpenHandler(({ url }) => {
+  contents.setWindowOpenHandler(({ url }) => {
     const decision = apply(() => undefined, url, true);
     // Popups never become a second shell window. Same-origin http(s) stays here.
     if (decision === "allow" && (url.startsWith("http:") || url.startsWith("https:"))) {
