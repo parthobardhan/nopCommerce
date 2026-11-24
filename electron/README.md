@@ -124,6 +124,20 @@ Saving while `NOPCOMMERCE_URL` is set writes the file for the next launch and le
 
 The settings window is a local page with its own preload. That preload exposes `get` and `save` only. The storefront preload still does not expose Node.
 
+## Campaigns
+
+`campaigns/black-friday-2026.json` is bundled into the package. It only advertises the offer; create the discount and its code in nopCommerce admin separately. Nothing is shown in the window yet; the main process logs `Campaign <id> is active` and `Campaign <id> is inactive`.
+
+`settings.json` may also hold a `promotions` object (no Settings UI yet):
+
+| Field | Default | Effect |
+| --- | --- | --- |
+| `enabled` | `true` | Kill switch. `false` schedules no campaign. |
+| `campaignOverride` | none | Shallow-merged over the bundled file; `theme` is merged per color. |
+| `campaignState` | `{}` | `dismissed` and `notified` per campaign `id`. |
+
+`startsAt` and `endsAt` need `Z` or an explicit offset. The campaign is active from `startsAt` (inclusive) until `endsAt` (exclusive). `ctaUrl` must be `http`, `https`, or a store path such as `/`, which opens the store home page. Any invalid field disables the campaign and logs `Campaign disabled: …`. The schedule is rechecked at the next boundary, on resume, on screen unlock, and when the system clock jumps.
+
 ## Session
 
 The window uses the persistent partition `persist:nopcommerce`. Cookies, localStorage, and IndexedDB for the store are written under Electron's user data directory (`Partitions/nopcommerce` on Linux, inside `~/.config/nopcommerce-electron/`). The `persist:` prefix is required; a partition without it would keep the session in memory only.

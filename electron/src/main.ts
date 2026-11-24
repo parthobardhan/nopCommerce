@@ -1,8 +1,10 @@
-import { app, BrowserWindow, Notification, dialog, ipcMain, screen, session } from "electron";
+import { app, BrowserWindow, Notification, dialog, ipcMain, powerMonitor, screen, session } from "electron";
 import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import { installAppMenu } from "./app-menu";
 import { destroyTray, installTray } from "./app-tray";
+import { BUNDLED_CAMPAIGN_FILE, loadCampaign, readCampaignFile, type Campaign } from "./campaign";
+import { CampaignScheduler } from "./campaign-scheduler";
 import { aboutCopy, canDeliverNotification, sampleNotification, shouldHideWhenMinimized } from "./desktop-shell";
 import {
   connectionErrorFile,
@@ -20,7 +22,9 @@ import { STORE_PARTITION } from "./session-partition";
 import {
   ADMIN_PATH,
   STOREFRONT_PATH,
+  campaignOverride,
   defaultShellSettings,
+  promotionsEnabled,
   formatWindowTitle,
   readSettings,
   resolveLaunchSettings,
@@ -49,6 +53,7 @@ let urlOverriddenByEnv = false;
 let storedSettings: ShellSettings = defaultShellSettings();
 let pendingDeepLink = findDeepLink(process.argv);
 let storeWindow: BrowserWindow | undefined;
+let campaignScheduler: CampaignScheduler | undefined;
 const attemptedUrl = new WeakMap<BrowserWindow, string>();
 
 function storefrontWindow(): BrowserWindow | undefined {
@@ -325,7 +330,7 @@ function bootstrap(): void {
       if (!parsed.ok) {
         return parsed;
       }
-      storedSettings = parsed.settings;
+      storedSettings = { ...parsed.settings, promotions: storedSettings.promotions };
       environmentLabel = parsed.settings.environmentLabel;
       try {
         writeSettings(settingsFile(app.getPath("userData")), storedSettings);
@@ -342,12 +347,12 @@ function bootstrap(): void {
         if (window) {
           loadStore(window, storeUrl);
         }
-        return { ok: true, message: "Saved. Opening the store.", settings: storedSettings };
+        return { ok: true, message: "Saved. Opening the store.", settings: parsed.settings };
       }
       return {
         ok: true,
         message: "Saved for the next launch. This process is still using NOPCOMMERCE_URL.",
-        settings: storedSettings,
+        settings: parsed.settings,
       };
     },
   });
@@ -362,6 +367,7 @@ function bootstrap(): void {
 
   createMainWindow();
   scheduleUpdateCheck();
+  startCampaignScheduler();
   try {
     installTray({
       show: showStorefront,
@@ -389,6 +395,7 @@ app.on("before-quit", (event) => {
   }
   event.preventDefault();
   quitting = true;
+  campaignScheduler?.stop();
   persistSessionCookies(session.fromPartition(STORE_PARTITION))
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -434,6 +441,23 @@ function showSampleNotification(): void {
   const notification = new Notification({ title: notice.title, body: notice.body });
   notification.on("click", () => showStorefront());
   notification.show();
+}
+
+function startCampaignScheduler(): void {
+  if (!promotionsEnabled(storedSettings)) {
+    console.log("Promotions are turned off in settings");
+  }
+  const campaign = loadCampaign({
+    bundled: readCampaignFile(path.join(__dirname, "..", BUNDLED_CAMPAIGN_FILE)),
+    override: campaignOverride(storedSettings),
+    promotionsEnabled: promotionsEnabled(storedSettings),
+    storeUrl,
+    warn: (message) => console.warn(message),
+  });
+  campaignScheduler = new CampaignScheduler({ campaign, power: powerMonitor });
+  campaignScheduler.on("active", (active: Campaign) => console.log(`Campaign ${active.id} is active`));
+  campaignScheduler.on("inactive", (ended: Campaign) => console.log(`Campaign ${ended.id} is inactive`));
+  campaignScheduler.start();
 }
 
 function scheduleUpdateCheck(): void {
