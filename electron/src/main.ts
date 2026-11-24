@@ -35,6 +35,7 @@ import {
 import { storeUrlFromDeepLink } from "./deep-link";
 import { devToolsInMenu } from "./menu-spec";
 import { attachNavigationGuards } from "./navigation-guard";
+import { fileProtocolRoot } from "./packaged-fuses";
 import { findDeepLink, protocolClientInvocation } from "./protocol-stub";
 import { RETRY_CHANNEL } from "./retry-channel";
 import { campaignSummary, PromotionController } from "./promotions";
@@ -105,7 +106,7 @@ function loadStore(window: BrowserWindow, url: string): void {
 }
 
 function showConnectionError(window: BrowserWindow, failedUrl: string, detail: string): void {
-  const file = connectionErrorFile(APP_ROOT);
+  const file = connectionErrorFile(fileProtocolRoot(APP_ROOT));
   void storeContents(window).loadFile(file, { query: { storeUrl: failedUrl, detail } }).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Could not open the connection page: ${message}`);
@@ -209,7 +210,7 @@ function createMainWindow(): BrowserWindow {
     window.contentView,
     storeView,
     createBannerView,
-    bannerFile(APP_ROOT),
+    bannerFile(fileProtocolRoot(APP_ROOT)),
   );
   bannerHost = banner;
 
@@ -246,7 +247,7 @@ function createMainWindow(): BrowserWindow {
   rememberWindowState(window, statePath);
   attachNavigationGuards(contents, {
     getStoreUrl: () => storeUrl,
-    connectionFile: connectionErrorFile(APP_ROOT),
+    connectionFile: connectionErrorFile(fileProtocolRoot(APP_ROOT)),
     openInWindow: (url) => loadStore(window, url),
   });
 

@@ -14,6 +14,9 @@ files:
   - campaigns/*.json
   - package.json
 asar: true
+# file:// cannot read inside app.asar while grantFileProtocolExtraPrivileges is off.
+asarUnpack:
+  - static/**
 # Fuses are flipped in scripts/after-pack.js. macOS hardened runtime stays off
 # until a Developer ID cert is supplied; an unsigned hardened runtime will not launch.
 afterPack: scripts/after-pack.js

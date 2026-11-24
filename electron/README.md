@@ -235,7 +235,7 @@ The running shell keeps `contextIsolation`, `nodeIntegration: false`, and `sandb
 | `EnableNodeOptionsEnvironmentVariable` | off |
 | `EnableNodeCliInspectArguments` | off |
 | `OnlyLoadAppFromAsar` | on |
-| `GrantFileProtocolExtraPrivileges` | off. The connection and settings pages are self-contained `file:` documents. |
+| `GrantFileProtocolExtraPrivileges` | off. With it off, `file:` cannot read inside `app.asar`, so `static/**` is unpacked (`asarUnpack`) and the connection, settings, and banner pages load from `app.asar.unpacked`. |
 | `EnableEmbeddedAsarIntegrityValidation` | off. No ASAR integrity hash is embedded, so the fuse would refuse to launch. |
 | `LoadBrowserProcessSpecificV8Snapshot` | off. There is no custom snapshot. |
 

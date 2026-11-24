@@ -17,3 +17,11 @@ export const PACKAGED_FUSES = {
   loadBrowserProcessSpecificV8Snapshot: false,
   grantFileProtocolExtraPrivileges: false,
 } as const;
+
+/**
+ * With grantFileProtocolExtraPrivileges off, file:// cannot read inside app.asar.
+ * Pages loaded with loadFile come from app.asar.unpacked (asarUnpack: static/**).
+ */
+export function fileProtocolRoot(appRoot: string): string {
+  return appRoot.replace(/app\.asar(?=[\\/]|$)/, "app.asar.unpacked");
+}

@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
+import { fileProtocolRoot } from "./packaged-fuses";
 import { SETTINGS_GET_CHANNEL, SETTINGS_SAVE_CHANNEL } from "./settings-channel";
 
 export type SettingsView = {
@@ -93,5 +94,5 @@ export function openSettingsWindow(parent: BrowserWindow | undefined): void {
       event.preventDefault();
     }
   });
-  void window.loadFile(path.join(__dirname, "..", "static", "settings.html"));
+  void window.loadFile(path.join(fileProtocolRoot(path.join(__dirname, "..")), "static", "settings.html"));
 }

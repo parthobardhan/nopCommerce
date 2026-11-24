@@ -21,6 +21,7 @@ test("electron-builder config covers Windows, macOS, and Linux", () => {
   assert.match(config, /^ {2}- campaigns\/\*\.json$/m);
   assert.ok(fs.existsSync(path.join(root, "campaigns", "black-friday-2026.json")));
   assert.match(config, /^ {2}- static\/\*\*$/m);
+  assert.match(config, /^asarUnpack:\n {2}- static\/\*\*$/m);
   for (const file of ["banner.html", "banner.css", "banner.js", "banner-preload.js"]) {
     assert.ok(fs.existsSync(path.join(root, "static", file)), file);
   }
